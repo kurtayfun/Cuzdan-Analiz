@@ -19,7 +19,7 @@ interface TransactionListProps {
   transactions: Transaction[];
   selectedMonth: string;
   onEdit: (tx: Transaction) => void;
-  onDelete: (id: string) => void;
+  onDelete: (tx: Transaction) => void;
   onDuplicate: (tx: Transaction) => void;
 }
 
@@ -270,7 +270,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                           <Copy className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => onDelete(tx.id)}
+                          onClick={() => onDelete(tx)}
                           className="p-1.5 rounded-md hover:bg-rose-950/60 text-zinc-500 hover:text-rose-400 transition"
                           title="Sil"
                         >

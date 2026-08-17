@@ -383,7 +383,10 @@ export function generateSingleFileHtml(defaultGasUrl = ''): string {
         }
 
         async function deleteTx(id) {
-            if (!confirm('Bu kaydı silmek istediğinize emin misiniz?')) return;
+            const item = transactions.find(t => t.id === id);
+            const promptNote = item ? (item.note || item.category) : '';
+            if (window.confirm && !confirm('Bu kaydı (' + promptNote + ') silmek istediğinize emin misiniz?')) return;
+            
             transactions = transactions.filter(t => t.id !== id);
             saveLocal();
             renderTable();
@@ -395,9 +398,18 @@ export function generateSingleFileHtml(defaultGasUrl = ''): string {
                         method: 'POST',
                         mode: 'no-cors',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'delete', id: id })
+                        body: JSON.stringify({ 
+                            action: 'delete', 
+                            id: id,
+                            date: item ? item.date : undefined,
+                            category: item ? item.category : undefined,
+                            amount: item ? item.amount : undefined,
+                            note: item ? item.note : undefined
+                        })
                     });
-                } catch(e) {}
+                } catch(e) {
+                    console.error('GAS Delete Error:', e);
+                }
             }
         }
 

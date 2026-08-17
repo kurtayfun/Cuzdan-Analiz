@@ -10,6 +10,7 @@ import { TransactionForm } from './components/TransactionForm';
 import { TransactionList } from './components/TransactionList';
 import { MonthlyTrends } from './components/MonthlyTrends';
 import { GasSetupModal } from './components/GasSetupModal';
+import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { 
   Transaction, 
   MonthlySummary, 
@@ -50,6 +51,8 @@ export default function App() {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [activeView, setActiveView] = useState<ViewMode>('dashboard');
   const [isGasModalOpen, setIsGasModalOpen] = useState<boolean>(false);
+  const [txToDelete, setTxToDelete] = useState<Transaction | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -165,31 +168,39 @@ export default function App() {
     showToast(isEdit ? 'İşlem güncellendi.' : 'Yeni işlem eklendi.');
   };
 
-  // Delete transaction
-  const handleDeleteTransaction = async (id: string) => {
-    const itemToDelete = transactions.find((t) => t.id === id);
-    const confirmMsg = itemToDelete
-      ? `"${itemToDelete.note || itemToDelete.category}" (${formatCurrencyTRY(itemToDelete.amount)}) işlemini silmek istiyor musunuz?`
-      : 'Bu işlemi silmek istediğinize emin misiniz?';
+  // Delete transaction trigger (opens custom modal)
+  const handleDeleteTransaction = (tx: Transaction) => {
+    setTxToDelete(tx);
+  };
 
-    if (!window.confirm(confirmMsg)) return;
+  // Confirm delete execution
+  const handleConfirmDelete = async () => {
+    if (!txToDelete) return;
+    setIsDeleting(true);
 
-    const updated = transactions.filter((t) => t.id !== id);
+    const targetTx = txToDelete;
+    const updated = transactions.filter((t) => t.id !== targetTx.id);
     setTransactions(updated);
     saveLocalTransactions(updated);
 
-    if (editingTx?.id === id) {
+    if (editingTx?.id === targetTx.id) {
       setEditingTx(null);
     }
 
     if (gasConfig.url) {
       postToGas(gasConfig.url, {
         action: 'delete',
-        id,
+        id: targetTx.id,
+        date: targetTx.date,
+        category: targetTx.category,
+        amount: targetTx.amount,
+        note: targetTx.note,
       }).catch((err) => console.error('Background GAS Delete Error:', err));
     }
 
-    showToast('Kayıt silindi.');
+    setIsDeleting(false);
+    setTxToDelete(null);
+    showToast(`"${targetTx.note || targetTx.category}" kaydı silindi.`);
   };
 
   // Duplicate transaction with today's date
@@ -470,6 +481,15 @@ export default function App() {
         gasUrl={gasConfig.url}
         onSaveGasUrl={handleSaveGasUrl}
         onTestConnection={handleTestConnection}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={Boolean(txToDelete)}
+        transaction={txToDelete}
+        onClose={() => setTxToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        isDeleting={isDeleting}
       />
     </div>
   );

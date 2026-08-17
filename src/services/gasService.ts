@@ -40,14 +40,20 @@ function doPost(e) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     
     // Tablo başlıklarını kontrol et ve gerekirse ekle
-    if (sheet.getLastColumn() === 0) {
+    if (sheet.getLastColumn() === 0 || sheet.getLastRow() === 0) {
       sheet.appendRow(["ID", "Tarih", "Kategori", "Tutar", "Açıklama", "Kayıt Tarihi"]);
       sheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#1e293b").setFontColor("#f8fafc");
     }
     
     let payload = {};
     if (e && e.postData && e.postData.contents) {
-      payload = JSON.parse(e.postData.contents);
+      try {
+        payload = JSON.parse(e.postData.contents);
+      } catch (jsonErr) {
+        payload = e.parameter || {};
+      }
+    } else if (e && e.parameter) {
+      payload = e.parameter;
     } else {
       return createJsonResponse({ status: "error", message: "Veri içeriği boş" });
     }
@@ -57,13 +63,49 @@ function doPost(e) {
 
     // 1. SİLME İŞLEMİ
     if (action === "delete") {
-      for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]) === String(id)) {
-          sheet.deleteRow(i + 1);
-          return createJsonResponse({ status: "success", message: "Kayıt başarıyla silindi", id: id });
+      const targetId = String(id || "").trim();
+      let deleted = false;
+
+      // Öncelikle ID (Sütun A) eşleşmesine bak
+      if (targetId) {
+        for (let i = 1; i < data.length; i++) {
+          const rowId = String(data[i][0] || "").trim();
+          if (rowId && rowId === targetId) {
+            sheet.deleteRow(i + 1);
+            deleted = true;
+            return createJsonResponse({ status: "success", message: "Kayıt başarıyla silindi", id: targetId });
+          }
         }
       }
-      return createJsonResponse({ status: "error", message: "Silinecek ID bulunamadı" });
+
+      // ID ile bulunamadıysa (örneğin manuel girilmiş veya harici satırlar), Tarih + Kategori + Tutar ile eşleştir
+      if (!deleted && (date || amount !== undefined)) {
+        for (let i = 1; i < data.length; i++) {
+          let rowDate = "";
+          if (data[i][1] instanceof Date) {
+            rowDate = Utilities.formatDate(data[i][1], Session.getScriptTimeZone() || "GMT+3", "yyyy-MM-dd");
+          } else {
+            rowDate = String(data[i][1] || "").substring(0, 10);
+          }
+          const rowCat = String(data[i][2] || "").trim();
+          const rowAmt = Number(data[i][3]) || 0;
+          const targetAmt = Number(amount) || 0;
+
+          const dateMatches = !date || rowDate === String(date).substring(0, 10);
+          const catMatches = !category || rowCat.toLowerCase() === String(category).trim().toLowerCase();
+          const amtMatches = amount === undefined || Math.abs(rowAmt - targetAmt) < 0.01;
+
+          if (dateMatches && catMatches && amtMatches) {
+            sheet.deleteRow(i + 1);
+            deleted = true;
+            return createJsonResponse({ status: "success", message: "Kayıt detaylarıyla eşleşti ve silindi", row: i + 1 });
+          }
+        }
+      }
+
+      if (!deleted) {
+        return createJsonResponse({ status: "error", message: "Silinecek kayıt bulunamadı: " + targetId });
+      }
     }
 
     // 2. GÜNCELLEME İŞLEMİ
@@ -72,8 +114,10 @@ function doPost(e) {
     const rowData = [rowId, date, category, Number(amount) || 0, note || "", timestamp];
 
     if (action === "update" && id) {
+      const targetId = String(id).trim();
       for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]) === String(id)) {
+        const currentId = String(data[i][0] || "").trim();
+        if (currentId === targetId) {
           sheet.getRange(i + 1, 1, 1, rowData.length).setValues([rowData]);
           return createJsonResponse({ status: "success", message: "Kayıt güncellendi", data: rowData });
         }
