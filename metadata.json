@@ -1,0 +1,6 @@
+{
+  "name": "Nakit Akışı ve Birikim Takip",
+  "description": "Google E-Tablolar ve Apps Script entegrasyonlu aylık nakit akışı, harcama ve birikim takip uygulaması",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
