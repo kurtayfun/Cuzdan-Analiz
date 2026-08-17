@@ -11,15 +11,19 @@ import { TransactionList } from './components/TransactionList';
 import { MonthlyTrends } from './components/MonthlyTrends';
 import { GasSetupModal } from './components/GasSetupModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
+import { TemplateManagerModal } from './components/TemplateManagerModal';
 import { 
   Transaction, 
   MonthlySummary, 
   GasConfig, 
-  ViewMode 
+  ViewMode,
+  QuickTemplate 
 } from './types';
 import { 
   loadLocalTransactions, 
   saveLocalTransactions, 
+  loadLocalTemplates,
+  saveLocalTemplates,
   getStoredGasUrl, 
   setStoredGasUrl, 
   fetchFromGas, 
@@ -48,9 +52,11 @@ export default function App() {
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [templates, setTemplates] = useState<QuickTemplate[]>(() => loadLocalTemplates());
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [activeView, setActiveView] = useState<ViewMode>('dashboard');
   const [isGasModalOpen, setIsGasModalOpen] = useState<boolean>(false);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState<boolean>(false);
   const [txToDelete, setTxToDelete] = useState<Transaction | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -268,9 +274,15 @@ export default function App() {
     }
   };
 
+  const handleSaveTemplates = (newTemplates: QuickTemplate[]) => {
+    setTemplates(newTemplates);
+    saveLocalTemplates(newTemplates);
+    showToast('Hızlı şablonlar güncellendi.');
+  };
+
   // Export handlers
   const handleExportHtml = () => {
-    const html = generateSingleFileHtml(gasConfig.url);
+    const html = generateSingleFileHtml(gasConfig.url, templates);
     downloadFile('index.html', html, 'text/html');
     showToast('Tek dosya index.html indirildi!');
   };
@@ -406,6 +418,8 @@ export default function App() {
                 editingTx={editingTx}
                 onCancelEdit={() => setEditingTx(null)}
                 selectedMonth={selectedMonth}
+                templates={templates}
+                onOpenTemplateManager={() => setIsTemplateModalOpen(true)}
               />
             </div>
 
@@ -490,6 +504,14 @@ export default function App() {
         onClose={() => setTxToDelete(null)}
         onConfirm={handleConfirmDelete}
         isDeleting={isDeleting}
+      />
+
+      {/* Template Manager Modal */}
+      <TemplateManagerModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        templates={templates}
+        onSaveTemplates={handleSaveTemplates}
       />
     </div>
   );

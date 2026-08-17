@@ -9,9 +9,11 @@ import {
   Send, 
   Banknote, 
   Tag, 
-  Loader2 
+  Loader2,
+  Sliders,
+  Settings
 } from 'lucide-react';
-import { Transaction, TransactionCategory } from '../types';
+import { Transaction, TransactionCategory, QuickTemplate } from '../types';
 import { formatCurrencyTRY } from '../services/exportService';
 
 interface TransactionFormProps {
@@ -19,6 +21,8 @@ interface TransactionFormProps {
   editingTx: Transaction | null;
   onCancelEdit: () => void;
   selectedMonth: string;
+  templates: QuickTemplate[];
+  onOpenTemplateManager: () => void;
 }
 
 const CATEGORIES: { label: TransactionCategory; type: 'income' | 'expense' }[] = [
@@ -35,6 +39,8 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
   editingTx,
   onCancelEdit,
   selectedMonth,
+  templates,
+  onOpenTemplateManager,
 }) => {
   const [date, setDate] = useState<string>(() => {
     const today = new Date().toISOString().substring(0, 10);
@@ -95,18 +101,37 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
     }
   };
 
-  const handleApplyPreset = (presetCategory: TransactionCategory, presetNote: string) => {
-    setCategory(presetCategory);
-    setNote(presetNote);
+  const handleApplyTemplate = (tpl: QuickTemplate) => {
+    setCategory(tpl.category);
+    setNote(tpl.defaultNote || '');
+    if (tpl.defaultAmount && tpl.defaultAmount > 0) {
+      setAmount(tpl.defaultAmount.toString());
+    }
     const input = document.getElementById('tx-amount-input');
     input?.focus();
+  };
+
+  const getTemplateStyle = (cat: TransactionCategory) => {
+    if (cat === 'Sabit Gelir' || cat === 'Ek Gelir') {
+      return 'text-emerald-400 border-emerald-900/40 hover:bg-emerald-950/50 hover:border-emerald-700/60';
+    }
+    if (cat === 'Kart Ekstresi') {
+      return 'text-rose-400 border-rose-900/40 hover:bg-rose-950/50 hover:border-rose-700/60';
+    }
+    if (cat === 'Nakit Çekim') {
+      return 'text-amber-400 border-amber-900/40 hover:bg-amber-950/50 hover:border-amber-700/60';
+    }
+    if (cat === 'Transfer Gideri') {
+      return 'text-blue-400 border-blue-900/40 hover:bg-blue-950/50 hover:border-blue-700/60';
+    }
+    return 'text-purple-400 border-purple-900/40 hover:bg-purple-950/50 hover:border-purple-700/60';
   };
 
   return (
     <div className="flex flex-col gap-6">
       {/* Main Input Form Card */}
       <section className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-2xl">
-        <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-6 flex items-center justify-between">
+        <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-5 flex items-center justify-between">
           <span className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${editingTx ? 'bg-amber-400' : 'bg-blue-500'}`}></span>
             {editingTx ? 'İşlemi Düzenle' : 'İşlem Girişi'}
@@ -120,39 +145,34 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
 
         {/* Quick Presets */}
         {!editingTx && (
-          <div className="mb-4">
-            <label className="block text-[10px] text-zinc-500 uppercase font-bold mb-1.5">
-              Hızlı Şablonlar
-            </label>
+          <div className="mb-4 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                Hızlı Şablonlar
+              </label>
+              <button
+                type="button"
+                onClick={onOpenTemplateManager}
+                className="text-[10px] text-blue-400 hover:text-blue-300 font-mono flex items-center gap-1 hover:underline transition"
+              >
+                <Sliders className="w-3 h-3" />
+                <span>Şablonları Özelleştir</span>
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-              <button
-                type="button"
-                onClick={() => handleApplyPreset('Sabit Gelir', 'Aylık Net Maaş')}
-                className="bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-lg p-2 text-xs font-mono text-emerald-400 text-left transition-colors"
-              >
-                + Maaş
-              </button>
-              <button
-                type="button"
-                onClick={() => handleApplyPreset('Transfer Gideri', 'Kira & Aidat Transferi')}
-                className="bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-lg p-2 text-xs font-mono text-blue-400 text-left transition-colors"
-              >
-                - Kira
-              </button>
-              <button
-                type="button"
-                onClick={() => handleApplyPreset('Kart Ekstresi', 'Kredi Kartı Ekstre Ödemesi')}
-                className="bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-lg p-2 text-xs font-mono text-rose-400 text-left transition-colors"
-              >
-                - Kart
-              </button>
-              <button
-                type="button"
-                onClick={() => handleApplyPreset('Nakit Çekim', 'ATM Nakit Çekim')}
-                className="bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-lg p-2 text-xs font-mono text-amber-400 text-left transition-colors"
-              >
-                - Nakit
-              </button>
+              {templates.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => handleApplyTemplate(tpl)}
+                  className={`bg-zinc-950 border rounded-lg p-2 text-xs font-mono text-left transition-all ${getTemplateStyle(tpl.category)}`}
+                  title={`${tpl.category} - ${tpl.defaultNote || tpl.title}`}
+                >
+                  <div className="font-bold truncate">{tpl.title}</div>
+                  <div className="text-[9px] text-zinc-500 truncate font-sans">{tpl.defaultNote || tpl.category}</div>
+                </button>
+              ))}
             </div>
           </div>
         )}

@@ -1,4 +1,5 @@
-import { Transaction } from '../types';
+import { Transaction, QuickTemplate } from '../types';
+import { DEFAULT_QUICK_TEMPLATES } from '../components/TemplateManagerModal';
 
 export const CODE_GS_SCRIPT = `// ==========================================
 // Google Apps Script (Code.gs)
@@ -259,6 +260,32 @@ export function loadLocalTransactions(): Transaction[] {
     return INITIAL_SAMPLE_DATA;
   } catch {
     return INITIAL_SAMPLE_DATA;
+  }
+}
+
+const TEMPLATES_STORAGE_KEY = 'cashflow_templates_v2';
+
+export function loadLocalTemplates(): QuickTemplate[] {
+  try {
+    const raw = localStorage.getItem(TEMPLATES_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_QUICK_TEMPLATES;
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+    return DEFAULT_QUICK_TEMPLATES;
+  } catch {
+    return DEFAULT_QUICK_TEMPLATES;
+  }
+}
+
+export function saveLocalTemplates(templates: QuickTemplate[]): void {
+  try {
+    localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+  } catch (err) {
+    console.error('Failed to save templates to localStorage', err);
   }
 }
 

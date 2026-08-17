@@ -1,5 +1,6 @@
-import { Transaction } from '../types';
+import { Transaction, QuickTemplate } from '../types';
 import { CODE_GS_SCRIPT } from './gasService';
+import { DEFAULT_QUICK_TEMPLATES } from '../components/TemplateManagerModal';
 
 export function formatCurrencyTRY(amount: number): string {
   return new Intl.NumberFormat('tr-TR', {
@@ -31,7 +32,9 @@ export function formatDateTR(dateStr: string): string {
   }
 }
 
-export function generateSingleFileHtml(defaultGasUrl = ''): string {
+export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: QuickTemplate[]): string {
+  const templatesJson = JSON.stringify(initialTemplates || DEFAULT_QUICK_TEMPLATES);
+
   return `<!DOCTYPE html>
 <html lang="tr" class="dark">
 <head>
@@ -99,26 +102,20 @@ export function generateSingleFileHtml(defaultGasUrl = ''): string {
                     <h2 id="formTitle" class="font-bold text-sm text-zinc-200 flex items-center gap-2">
                         <span>➕</span> Yeni İşlem Girişi
                     </h2>
-                    <span id="quickPresetLabel" class="text-[11px] text-zinc-500">Hızlı Hazır Şablonlar</span>
-                </div>
-
-                <!-- Hızlı Şablon Butonları -->
-                <div class="grid grid-cols-4 gap-1.5 text-[11px]">
-                    <button type="button" onclick="setPreset('Sabit Gelir', 'Aylık Maaş')" class="bg-zinc-800 hover:bg-zinc-700 py-1 px-2 rounded-lg text-emerald-400 border border-zinc-700/60 transition">
-                        + Maaş
-                    </button>
-                    <button type="button" onclick="setPreset('Transfer Gideri', 'Kira & Aidat')" class="bg-zinc-800 hover:bg-zinc-700 py-1 px-2 rounded-lg text-blue-400 border border-zinc-700/60 transition">
-                        - Kira
-                    </button>
-                    <button type="button" onclick="setPreset('Kart Ekstresi', 'Kart Ekstre Ödemesi')" class="bg-zinc-800 hover:bg-zinc-700 py-1 px-2 rounded-lg text-rose-400 border border-zinc-700/60 transition">
-                        - Kart
-                    </button>
-                    <button type="button" onclick="setPreset('Nakit Çekim', 'ATM Nakit Harçlık')" class="bg-zinc-800 hover:bg-zinc-700 py-1 px-2 rounded-lg text-amber-400 border border-zinc-700/60 transition">
-                        - Nakit
+                    <button type="button" onclick="openTemplateManager()" class="text-[11px] text-blue-400 hover:text-blue-300 transition flex items-center gap-1 hover:underline">
+                        <span>⚙️ Şablonları Özelleştir</span>
                     </button>
                 </div>
 
-                <form id="txForm" class="space-y-3.5">
+                <!-- Hızlı Şablon Butonları (Dinamik) -->
+                <div class="space-y-1.5">
+                    <label class="block text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Hızlı Şablonlar</label>
+                    <div id="quickTemplatesGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px]">
+                        <!-- JS ile doldurulacak -->
+                    </div>
+                </div>
+
+                <form id="txForm" class="space-y-3.5 pt-2 border-t border-zinc-800/80">
                     <input type="hidden" id="txId">
                     
                     <div class="grid grid-cols-2 gap-3">
@@ -143,7 +140,7 @@ export function generateSingleFileHtml(defaultGasUrl = ''): string {
                         <label class="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Tutar (₺)</label>
                         <div class="relative">
                             <span class="absolute left-3 top-2.5 text-zinc-500 text-xs font-bold">₺</span>
-                            <input type="number" step="0.01" id="txAmount" required placeholder="0.00" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-2.5 pl-8 pr-3 text-sm font-semibold outline-none focus:border-emerald-500">
+                            <input type="number" step="0.01" id="txAmount" required placeholder="0.00" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-2.5 pl-8 pr-3 text-sm font-semibold outline-none focus:border-emerald-500 font-mono">
                         </div>
                     </div>
 
@@ -257,9 +254,85 @@ export function generateSingleFileHtml(defaultGasUrl = ''): string {
         </section>
     </div>
 
+    <!-- Şablon Yönetim Modalı (Modal / Popup) -->
+    <div id="templateManagerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-950">
+                <div>
+                    <h3 class="font-bold text-sm text-zinc-100 uppercase">Hızlı Şablon Yönetimi</h3>
+                    <p class="text-[10px] text-zinc-500 font-mono">Şablon Ekle, Düzenle ve Özelleştir</p>
+                </div>
+                <button onclick="closeTemplateManager()" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white">✕</button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+                <!-- Şablon Ekleme Formu -->
+                <form id="tplForm" onsubmit="handleSaveTemplate(event)" class="bg-zinc-950 border border-blue-500/40 p-4 rounded-xl space-y-3">
+                    <input type="hidden" id="tplId">
+                    <div class="flex justify-between items-center border-b border-zinc-800 pb-2">
+                        <span id="tplFormHeading" class="font-bold text-[11px] uppercase tracking-wider text-blue-400 font-mono">Yeni Şablon Ekle</span>
+                        <button type="button" onclick="resetTplForm()" class="text-zinc-500 hover:text-zinc-300 text-[11px]">Temizle</button>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Buton Başlığı (Kısa)</label>
+                            <input type="text" id="tplTitle" required placeholder="Örn: - Kredi veya - Borç" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs outline-none focus:border-blue-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Kategori</label>
+                            <select id="tplCategory" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs outline-none focus:border-blue-500">
+                                <option value="Sabit Gelir">Sabit Gelir (+)</option>
+                                <option value="Ek Gelir">Ek Gelir (+)</option>
+                                <option value="Kart Ekstresi">Kart Ekstresi (-)</option>
+                                <option value="Transfer Gideri" selected>Transfer Gideri (-)</option>
+                                <option value="Nakit Çekim">Nakit Çekim (-)</option>
+                                <option value="Diğer Gider">Diğer Gider (-)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Otomatik Açıklama</label>
+                            <input type="text" id="tplNote" placeholder="Örn: Banka Kredi Taksiti" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Sabit Tutar (Opsiyonel)</label>
+                            <input type="number" step="0.01" id="tplAmount" placeholder="Örn: 5000" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs outline-none focus:border-blue-500 font-mono">
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-1">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-1.5 rounded-lg text-xs uppercase tracking-wider transition">
+                            Kaydet
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Mevcut Şablonlar Listesi -->
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Kayıtlı Şablonlar</span>
+                        <button type="button" onclick="resetDefaultTemplates()" class="text-[10px] text-zinc-400 hover:text-zinc-200 underline">Varsayılanlara Sıfırla</button>
+                    </div>
+                    <div id="tplListContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <!-- JS ile doldurulacak -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end px-6 py-3 border-t border-zinc-800 bg-zinc-950">
+                <button onclick="closeTemplateManager()" class="px-4 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold uppercase tracking-wider">
+                    Kapat
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let GAS_URL = localStorage.getItem('gas_url_v2') || '${defaultGasUrl}';
         let transactions = [];
+        let quickTemplates = [];
+
+        const DEFAULT_TEMPLATES = ${templatesJson};
 
         document.addEventListener('DOMContentLoaded', () => {
             const now = new Date();
@@ -267,6 +340,9 @@ export function generateSingleFileHtml(defaultGasUrl = ''): string {
             document.getElementById('selectedMonth').value = now.toISOString().substring(0, 7);
 
             document.getElementById('selectedMonth').addEventListener('change', updateAnalysis);
+
+            // Yerel şablonları yükle
+            loadTemplates();
 
             // Yerel kayıtları yükle
             const localRaw = localStorage.getItem('local_tx_v2');
@@ -285,6 +361,168 @@ export function generateSingleFileHtml(defaultGasUrl = ''): string {
             }
         });
 
+        // Şablon Yönetimi
+        function loadTemplates() {
+            const raw = localStorage.getItem('cashflow_templates_v2');
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        quickTemplates = parsed;
+                    } else {
+                        quickTemplates = [...DEFAULT_TEMPLATES];
+                    }
+                } catch(e) {
+                    quickTemplates = [...DEFAULT_TEMPLATES];
+                }
+            } else {
+                quickTemplates = [...DEFAULT_TEMPLATES];
+            }
+            renderQuickTemplates();
+        }
+
+        function saveTemplates() {
+            localStorage.setItem('cashflow_templates_v2', JSON.stringify(quickTemplates));
+            renderQuickTemplates();
+        }
+
+        function renderQuickTemplates() {
+            const container = document.getElementById('quickTemplatesGrid');
+            if (!container) return;
+
+            container.innerHTML = quickTemplates.map(tpl => {
+                let colorClass = 'text-blue-400 border-zinc-800';
+                if (tpl.category === 'Sabit Gelir' || tpl.category === 'Ek Gelir') {
+                    colorClass = 'text-emerald-400 border-zinc-800';
+                } else if (tpl.category === 'Kart Ekstresi') {
+                    colorClass = 'text-rose-400 border-zinc-800';
+                } else if (tpl.category === 'Nakit Çekim') {
+                    colorClass = 'text-amber-400 border-zinc-800';
+                }
+                const safeTpl = JSON.stringify(tpl).replace(/'/g, "&#39;");
+                return \`
+                    <button type="button" onclick='applyTemplate(\${safeTpl})' 
+                        class="bg-zinc-950 hover:bg-zinc-800 p-2 rounded-lg border font-mono text-left transition \${colorClass}"
+                        title="\${tpl.category} - \${tpl.defaultNote || tpl.title}">
+                        <div class="font-bold truncate">\${tpl.title}</div>
+                        <div class="text-[9px] text-zinc-500 truncate font-sans">\${tpl.defaultNote || tpl.category}</div>
+                    </button>
+                \`;
+            }).join('');
+        }
+
+        function applyTemplate(tpl) {
+            document.getElementById('txCategory').value = tpl.category;
+            document.getElementById('txNote').value = tpl.defaultNote || '';
+            if (tpl.defaultAmount && tpl.defaultAmount > 0) {
+                document.getElementById('txAmount').value = tpl.defaultAmount;
+            }
+            document.getElementById('txAmount').focus();
+        }
+
+        function openTemplateManager() {
+            document.getElementById('templateManagerModal').classList.remove('hidden');
+            renderTemplateListInModal();
+            resetTplForm();
+        }
+
+        function closeTemplateManager() {
+            document.getElementById('templateManagerModal').classList.add('hidden');
+        }
+
+        function renderTemplateListInModal() {
+            const list = document.getElementById('tplListContainer');
+            if (!list) return;
+
+            if (quickTemplates.length === 0) {
+                list.innerHTML = '<div class="col-span-2 text-center p-4 text-zinc-500 font-mono text-xs">Kayıtlı şablon bulunamadı.</div>';
+                return;
+            }
+
+            list.innerHTML = quickTemplates.map(tpl => {
+                const safeTpl = JSON.stringify(tpl).replace(/'/g, "&#39;");
+                return \`
+                    <div class="bg-zinc-950 border border-zinc-800 p-2.5 rounded-xl flex items-center justify-between gap-2">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-bold text-xs text-zinc-100 font-mono">\${tpl.title}</span>
+                                <span class="text-[9px] px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono">\${tpl.category}</span>
+                            </div>
+                            <div class="text-[11px] text-zinc-400 truncate italic">\${tpl.defaultNote || '-'}</div>
+                            \${tpl.defaultAmount ? \`<div class="text-[10px] text-zinc-500 font-mono">Sabit: \${formatTRY(tpl.defaultAmount)}</div>\` : ''}
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button type="button" onclick='editTemplate(\${safeTpl})' class="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white" title="Düzenle">✏️</button>
+                            <button type="button" onclick='deleteTemplate("\${tpl.id}")' class="p-1 rounded bg-zinc-900 hover:bg-rose-950 text-zinc-500 hover:text-rose-400" title="Sil">🗑️</button>
+                        </div>
+                    </div>
+                \`;
+            }).join('');
+        }
+
+        function handleSaveTemplate(e) {
+            e.preventDefault();
+            const id = document.getElementById('tplId').value;
+            const title = document.getElementById('tplTitle').value.trim();
+            const category = document.getElementById('tplCategory').value;
+            const defaultNote = document.getElementById('tplNote').value.trim();
+            const amtVal = parseFloat(document.getElementById('tplAmount').value);
+            const defaultAmount = (!isNaN(amtVal) && amtVal > 0) ? amtVal : undefined;
+
+            if (!title) return;
+
+            if (id) {
+                // Edit
+                quickTemplates = quickTemplates.map(t => t.id === id ? { ...t, title, category, defaultNote, defaultAmount } : t);
+            } else {
+                // Add new
+                const newTpl = {
+                    id: 'tpl_' + Date.now(),
+                    title,
+                    category,
+                    defaultNote,
+                    defaultAmount
+                };
+                quickTemplates.push(newTpl);
+            }
+
+            saveTemplates();
+            renderTemplateListInModal();
+            resetTplForm();
+        }
+
+        function editTemplate(tpl) {
+            document.getElementById('tplId').value = tpl.id;
+            document.getElementById('tplTitle').value = tpl.title;
+            document.getElementById('tplCategory').value = tpl.category;
+            document.getElementById('tplNote').value = tpl.defaultNote || '';
+            document.getElementById('tplAmount').value = tpl.defaultAmount ? tpl.defaultAmount : '';
+            document.getElementById('tplFormHeading').innerText = 'Şablonu Düzenle';
+        }
+
+        function deleteTemplate(id) {
+            quickTemplates = quickTemplates.filter(t => t.id !== id);
+            saveTemplates();
+            renderTemplateListInModal();
+            resetTplForm();
+        }
+
+        function resetTplForm() {
+            document.getElementById('tplForm').reset();
+            document.getElementById('tplId').value = '';
+            document.getElementById('tplCategory').value = 'Transfer Gideri';
+            document.getElementById('tplFormHeading').innerText = 'Yeni Şablon Ekle';
+        }
+
+        function resetDefaultTemplates() {
+            if (confirm('Şablonları varsayılan ayarlara döndürmek istiyor musunuz?')) {
+                quickTemplates = [...DEFAULT_TEMPLATES];
+                saveTemplates();
+                renderTemplateListInModal();
+                resetTplForm();
+            }
+        }
+
         function toggleSettings() {
             document.getElementById('settingsArea').classList.toggle('hidden');
         }
@@ -300,12 +538,6 @@ export function generateSingleFileHtml(defaultGasUrl = ''): string {
                 document.getElementById('gasStatusBadge').className = 'text-xs px-2.5 py-1 rounded-lg bg-emerald-950/60 text-emerald-400 border border-emerald-800';
                 fetchData();
             }
-        }
-
-        function setPreset(category, note) {
-            document.getElementById('txCategory').value = category;
-            document.getElementById('txNote').value = note;
-            document.getElementById('txAmount').focus();
         }
 
         // Form Submit (Ekle / Güncelle)
@@ -458,7 +690,7 @@ export function generateSingleFileHtml(defaultGasUrl = ''): string {
             tbody.innerHTML = sorted.map(item => {
                 const isIncome = item.category === 'Sabit Gelir' || item.category === 'Ek Gelir';
                 let catBadge = 'bg-zinc-800 text-zinc-300';
-                if (item.category === 'Sabit Gelir') catBadge = 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/80';
+                if (item.category === 'Sabit Gelir' || item.category === 'Ek Gelir') catBadge = 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/80';
                 else if (item.category === 'Kart Ekstresi') catBadge = 'bg-rose-950/60 text-rose-400 border border-rose-800/80';
                 else if (item.category === 'Transfer Gideri') catBadge = 'bg-blue-950/60 text-blue-400 border border-blue-800/80';
                 else if (item.category === 'Nakit Çekim') catBadge = 'bg-amber-950/60 text-amber-400 border border-amber-800/80';

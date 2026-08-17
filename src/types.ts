@@ -15,6 +15,14 @@ export interface Transaction {
   createdAt?: string;
 }
 
+export interface QuickTemplate {
+  id: string;
+  title: string;
+  category: TransactionCategory;
+  defaultNote: string;
+  defaultAmount?: number;
+}
+
 export interface MonthlySummary {
   period: string; // YYYY-MM
   totalIncome: number;
