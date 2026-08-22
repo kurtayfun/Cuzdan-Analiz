@@ -39,7 +39,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
       // Month filter
-      if (filterMode === 'month_only') {
+      if (filterMode === 'month_only' && selectedMonth !== 'all') {
         if (!t.date || !t.date.startsWith(selectedMonth)) return false;
       }
 
@@ -112,7 +112,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             SON İŞLEMLER
           </h2>
           <p className="text-[10px] text-zinc-500 uppercase font-mono mt-0.5">
-            {filterMode === 'month_only' ? `${selectedMonth} DÖNEMİ İŞLEM HAREKETLERİ` : 'TÜM KAYIT GEÇMİŞİ'}
+            {filterMode === 'month_only' && selectedMonth !== 'all' ? `${selectedMonth} DÖNEMİ İŞLEM HAREKETLERİ` : 'TÜM KAYIT GEÇMİŞİ'}
           </p>
         </div>
 

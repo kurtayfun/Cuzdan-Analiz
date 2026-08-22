@@ -7,7 +7,8 @@ export const CODE_GS_SCRIPT = `// ==========================================
 // ==========================================
 
 function doGet(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getActiveSheet();
   const data = sheet.getDataRange().getValues();
   
   if (data.length <= 1) {
@@ -16,13 +17,23 @@ function doGet(e) {
   
   const headers = data[0];
   const rows = data.slice(1);
+  // E-tablonun kendi saat dilimini al (Varsayılan GMT+3)
+  const ssTz = ss.getSpreadsheetTimeZone() || "GMT+3";
   
   const jsonData = rows.map((row, index) => {
     let obj = { rowId: index + 2 };
     headers.forEach((header, i) => {
-      // Tarih formatını standart YYYY-MM-DD stringine çevir
-      if (header === "Tarih" && row[i] instanceof Date) {
-        obj[header] = Utilities.formatDate(row[i], Session.getScriptTimeZone() || "GMT+3", "yyyy-MM-dd");
+      // Tarih formatını e-tablo saat dilimine göre YYYY-MM-DD olarak güvenle çevir
+      if (header === "Tarih") {
+        if (row[i] instanceof Date) {
+          obj[header] = Utilities.formatDate(row[i], ssTz, "yyyy-MM-dd");
+        } else if (typeof row[i] === "string") {
+          obj[header] = row[i].substring(0, 10);
+        } else {
+          obj[header] = String(row[i] || "");
+        }
+      } else if (header === "Kayıt Tarihi" && row[i] instanceof Date) {
+        obj[header] = Utilities.formatDate(row[i], ssTz, "yyyy-MM-dd HH:mm:ss");
       } else {
         obj[header] = row[i];
       }
@@ -38,12 +49,16 @@ function doPost(e) {
   lock.tryLock(10000);
   
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getActiveSheet();
+    const ssTz = ss.getSpreadsheetTimeZone() || "GMT+3";
     
     // Tablo başlıklarını kontrol et ve gerekirse ekle
     if (sheet.getLastColumn() === 0 || sheet.getLastRow() === 0) {
       sheet.appendRow(["ID", "Tarih", "Kategori", "Tutar", "Açıklama", "Kayıt Tarihi"]);
       sheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#1e293b").setFontColor("#f8fafc");
+      sheet.getRange("B:B").setNumberFormat("yyyy-mm-dd");
+      sheet.getRange("D:D").setNumberFormat("#,##0.00");
     }
     
     let payload = {};
@@ -61,6 +76,16 @@ function doPost(e) {
 
     const { action, id, date, category, amount, note } = payload;
     const data = sheet.getDataRange().getValues();
+
+    // Tarihi saat dilimi farkı (UTC vs Yerel Saat) kaynaklı 1 gün geriye kaymayı önlemek için saat 12:00 olarak kaydet
+    let entryDate = date;
+    if (typeof date === "string" && date.match(/^\\d{4}-\\d{2}-\\d{2}/)) {
+      const parts = date.substring(0, 10).split("-");
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      entryDate = new Date(y, m, d, 12, 0, 0);
+    }
 
     // 1. SİLME İŞLEMİ
     if (action === "delete") {
@@ -84,7 +109,7 @@ function doPost(e) {
         for (let i = 1; i < data.length; i++) {
           let rowDate = "";
           if (data[i][1] instanceof Date) {
-            rowDate = Utilities.formatDate(data[i][1], Session.getScriptTimeZone() || "GMT+3", "yyyy-MM-dd");
+            rowDate = Utilities.formatDate(data[i][1], ssTz, "yyyy-MM-dd");
           } else {
             rowDate = String(data[i][1] || "").substring(0, 10);
           }
@@ -112,7 +137,7 @@ function doPost(e) {
     // 2. GÜNCELLEME İŞLEMİ
     const timestamp = new Date();
     const rowId = id || "ID_" + timestamp.getTime();
-    const rowData = [rowId, date, category, Number(amount) || 0, note || "", timestamp];
+    const rowData = [rowId, entryDate, category, Number(amount) || 0, note || "", timestamp];
 
     if (action === "update" && id) {
       const targetId = String(id).trim();
@@ -120,14 +145,14 @@ function doPost(e) {
         const currentId = String(data[i][0] || "").trim();
         if (currentId === targetId) {
           sheet.getRange(i + 1, 1, 1, rowData.length).setValues([rowData]);
-          return createJsonResponse({ status: "success", message: "Kayıt güncellendi", data: rowData });
+          return createJsonResponse({ status: "success", message: "Kayıt güncellendi", data: [rowId, date, category, Number(amount) || 0, note || ""] });
         }
       }
     }
 
     // 3. YENİ KAYIT EKLEME
     sheet.appendRow(rowData);
-    return createJsonResponse({ status: "success", message: "Yeni kayıt eklendi", data: rowData });
+    return createJsonResponse({ status: "success", message: "Yeni kayıt eklendi", data: [rowId, date, category, Number(amount) || 0, note || ""] });
 
   } catch (err) {
     return createJsonResponse({ status: "error", message: err.toString() });
@@ -297,6 +322,13 @@ export function saveLocalTransactions(transactions: Transaction[]): void {
   }
 }
 
+export function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Fetch data from Google Apps Script Web App URL.
  */
@@ -321,7 +353,7 @@ export async function fetchFromGas(url: string): Promise<Transaction[]> {
     throw new Error('E-Tablodan beklenmeyen veri formatı döndü.');
   }
 
-  // Parse Google Sheets rows into Transaction objects
+  // Parse Google Sheets rows into Transaction objects safely
   const transactions: Transaction[] = data.map((item: any) => {
     let dateStr = '';
     if (item.Tarih) {
@@ -330,14 +362,14 @@ export async function fetchFromGas(url: string): Promise<Transaction[]> {
       } else {
         const d = new Date(item.Tarih);
         if (!isNaN(d.getTime())) {
-          dateStr = d.toISOString().substring(0, 10);
+          dateStr = getLocalDateString(d);
         }
       }
     }
 
     return {
       id: String(item.ID || item.rowId || 'ID_' + Math.random().toString(36).substring(2, 9)),
-      date: dateStr || new Date().toISOString().substring(0, 10),
+      date: dateStr || getLocalDateString(),
       category: (item.Kategori as any) || 'Diğer Gider',
       amount: Number(item.Tutar) || 0,
       note: String(item.Açıklama || ''),

@@ -27,7 +27,8 @@ import {
   getStoredGasUrl, 
   setStoredGasUrl, 
   fetchFromGas, 
-  postToGas 
+  postToGas,
+  getLocalDateString 
 } from './services/gasService';
 import { 
   generateSingleFileHtml, 
@@ -45,10 +46,9 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  // Current active month in format YYYY-MM
+  // Current active month in format YYYY-MM or 'all'
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return getLocalDateString().substring(0, 7);
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -293,8 +293,9 @@ export default function App() {
     showToast('CSV dosyası indirildi!');
   };
 
-  // Calculate Monthly Summary
+  // Calculate Monthly or All-Time Summary
   const monthlySummary = useMemo<MonthlySummary>(() => {
+    const isAllTime = selectedMonth === 'all';
     let income = 0;
     let card = 0;
     let transfer = 0;
@@ -303,7 +304,7 @@ export default function App() {
     let hasEntries = false;
 
     transactions.forEach((t) => {
-      if (t.date && t.date.startsWith(selectedMonth)) {
+      if (isAllTime || (t.date && t.date.startsWith(selectedMonth))) {
         hasEntries = true;
         const amt = t.amount || 0;
         if (t.category === 'Sabit Gelir' || t.category === 'Ek Gelir') {

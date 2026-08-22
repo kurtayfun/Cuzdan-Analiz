@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Transaction, TransactionCategory, QuickTemplate } from '../types';
 import { formatCurrencyTRY } from '../services/exportService';
+import { getLocalDateString } from '../services/gasService';
 
 interface TransactionFormProps {
   onSave: (tx: Omit<Transaction, 'id'> & { id?: string }) => Promise<void>;
@@ -43,8 +44,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
   onOpenTemplateManager,
 }) => {
   const [date, setDate] = useState<string>(() => {
-    const today = new Date().toISOString().substring(0, 10);
-    return today;
+    return getLocalDateString();
   });
   const [category, setCategory] = useState<TransactionCategory>('Kart Ekstresi');
   const [amount, setAmount] = useState<string>('');
@@ -60,8 +60,8 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
       setAmount(editingTx.amount.toString());
       setNote(editingTx.note || '');
     } else {
-      const today = new Date().toISOString().substring(0, 10);
-      if (today.startsWith(selectedMonth)) {
+      const today = getLocalDateString();
+      if (selectedMonth === 'all' || today.startsWith(selectedMonth)) {
         setDate(today);
       } else {
         setDate(`${selectedMonth}-01`);

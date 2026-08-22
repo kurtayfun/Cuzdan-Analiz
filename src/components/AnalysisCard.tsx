@@ -29,10 +29,15 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({ summary, selectedMon
     status,
   } = summary;
 
+  const isAllTime = selectedMonth === 'all';
+
   // Formatting date for title
-  const [year, monthNum] = selectedMonth.split('-').map(Number);
-  const monthDate = new Date(year, monthNum - 1, 1);
-  const monthName = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+  let monthName = 'Tüm Zamanlar';
+  if (!isAllTime) {
+    const [year, monthNum] = selectedMonth.split('-').map(Number);
+    const monthDate = new Date(year, (monthNum || 1) - 1, 1);
+    monthName = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+  }
 
   // Calculate percentages of total expenses
   const cardPct = totalExpense > 0 ? (cardExpense / totalExpense) * 100 : 0;
@@ -46,20 +51,28 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({ summary, selectedMon
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Toplam Gelir */}
         <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl shadow-lg">
-          <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-wider">Toplam Gelir</p>
+          <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-wider">
+            {isAllTime ? 'Genel Toplam Gelir' : 'Toplam Gelir'}
+          </p>
           <p className="text-2xl font-bold text-emerald-400 font-mono tracking-tighter">
             +{formatCurrencyTRY(totalIncome)}
           </p>
-          <p className="text-[10px] text-zinc-600 font-mono mt-1">Maaş & Ek Gelir</p>
+          <p className="text-[10px] text-zinc-600 font-mono mt-1">
+            {isAllTime ? 'Tüm Kayıtlı Gelirler' : 'Maaş & Ek Gelir'}
+          </p>
         </div>
 
         {/* Toplam Gider */}
         <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl shadow-lg">
-          <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-wider">Toplam Gider</p>
+          <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-wider">
+            {isAllTime ? 'Genel Toplam Gider' : 'Toplam Gider'}
+          </p>
           <p className="text-2xl font-bold text-rose-400 font-mono tracking-tighter">
             -{formatCurrencyTRY(totalExpense)}
           </p>
-          <p className="text-[10px] text-zinc-600 font-mono mt-1">Kart + Kira + Nakit</p>
+          <p className="text-[10px] text-zinc-600 font-mono mt-1">
+            {isAllTime ? 'Tüm Kayıtlı Giderler' : 'Kart + Kira + Nakit'}
+          </p>
         </div>
 
         {/* Net Tasarruf / Bakiye */}
@@ -73,7 +86,9 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({ summary, selectedMon
           <p className={`text-[10px] uppercase font-bold mb-1 tracking-wider ${
             status === 'surplus' ? 'text-emerald-500' : status === 'deficit' ? 'text-rose-500' : 'text-zinc-500'
           }`}>
-            {status === 'surplus' ? 'Net Tasarruf' : status === 'deficit' ? 'Net Bütçe Açığı' : 'Net Bakiye'}
+            {isAllTime
+              ? (status === 'surplus' ? 'Kümülatif Net Birikim' : status === 'deficit' ? 'Kümülatif Net Açık' : 'Kümülatif Bakiye')
+              : (status === 'surplus' ? 'Net Tasarruf' : status === 'deficit' ? 'Net Bütçe Açığı' : 'Net Bakiye')}
           </p>
           <p className={`text-2xl font-bold font-mono tracking-tighter ${
             status === 'surplus' ? 'text-emerald-500' : status === 'deficit' ? 'text-rose-400' : 'text-zinc-300'
@@ -81,7 +96,7 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({ summary, selectedMon
             {netBalance >= 0 ? '+' : ''}{formatCurrencyTRY(netBalance)}
           </p>
           <p className="text-[10px] text-zinc-500 font-mono mt-1">
-            {totalIncome > 0 ? `Tasarruf Oranı: %${savingsRate.toFixed(1)}` : 'Dönem Sonu Durumu'}
+            {totalIncome > 0 ? `Tasarruf Oranı: %${savingsRate.toFixed(1)}` : (isAllTime ? 'Genel Toplam Durumu' : 'Dönem Sonu Durumu')}
           </p>
         </div>
       </section>
@@ -92,22 +107,24 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({ summary, selectedMon
           <div>
             <h3 className="text-sm font-bold text-zinc-200 uppercase tracking-tight flex items-center gap-2">
               <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-              {monthName} Dönemsel Konsolidasyon
+              {monthName} {isAllTime ? 'Kümülatif Konsolidasyon' : 'Dönemsel Konsolidasyon'}
             </h3>
             <p className="text-[11px] text-zinc-500 uppercase tracking-widest font-mono mt-0.5">
-              DÖNEM: {selectedMonth} • CASH BASIS NAKİT DENGESİ
+              {isAllTime
+                ? 'DÖNEM: BAŞLANGIÇTAN BUGÜNE (TÜMÜ) • TOPLAM NAKİT VE BİRİKİM DENGESİ'
+                : `DÖNEM: ${selectedMonth} • CASH BASIS NAKİT DENGESİ`}
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             {status === 'surplus' && (
               <span className="bg-emerald-900/20 text-emerald-400 px-3 py-1 rounded-full border border-emerald-900/40 text-[10px] font-bold uppercase tracking-wider font-mono">
-                ● GELİRDEN KARŞILANDI
+                ● {isAllTime ? 'KÜMÜLATİF ARTI BAKİYE' : 'GELİRDEN KARŞILANDI'}
               </span>
             )}
             {status === 'deficit' && (
               <span className="bg-rose-900/20 text-rose-400 px-3 py-1 rounded-full border border-rose-900/40 text-[10px] font-bold uppercase tracking-wider font-mono animate-pulse">
-                ▲ BİRİKİMDEN HARCANDI
+                ▲ {isAllTime ? 'KÜMÜLATİF NET AÇIK' : 'BİRİKİMDEN HARCANDI'}
               </span>
             )}
             {status === 'empty' && (
@@ -133,17 +150,23 @@ export const AnalysisCard: React.FC<AnalysisCardProps> = ({ summary, selectedMon
         }`}>
           {status === 'surplus' && (
             <p>
-              Tüm harcamalar mevcut ay gelirinden karşılandı. Kalan <strong className="font-mono text-emerald-400">{formatCurrencyTRY(netBalance)}</strong> tutarındaki artı bakiye birikim ve yatırım portföyünüze eklenebilir.
+              {isAllTime
+                ? <>Başlangıçtan bu yana kaydedilen tüm işlemler incelendiğinde, toplam gelirleriniz harcamalarınızı karşılamış ve geriye net <strong className="font-mono text-emerald-400">{formatCurrencyTRY(netBalance)}</strong> tutarında kümülatif birikim kalmıştır.</>
+                : <>Tüm harcamalar mevcut ay gelirinden karşılandı. Kalan <strong className="font-mono text-emerald-400">{formatCurrencyTRY(netBalance)}</strong> tutarındaki artı bakiye birikim ve yatırım portföyünüze eklenebilir.</>}
             </p>
           )}
           {status === 'deficit' && (
             <p>
-              Aylık nakit çıkışları geliri aştı. Oluşan <strong className="font-mono text-rose-400">{formatCurrencyTRY(Math.abs(netBalance))}</strong> tutarındaki açık geçmiş birikimlerinizden finanse edilmiştir.
+              {isAllTime
+                ? <>Başlangıçtan bu yana kaydedilen toplam harcamalarınız gelirleri aşmıştır. Toplam net açık <strong className="font-mono text-rose-400">{formatCurrencyTRY(Math.abs(netBalance))}</strong> seviyesindedir.</>
+                : <>Aylık nakit çıkışları geliri aştı. Oluşan <strong className="font-mono text-rose-400">{formatCurrencyTRY(Math.abs(netBalance))}</strong> tutarındaki açık geçmiş birikimlerinizden finanse edilmiştir.</>}
             </p>
           )}
           {status === 'empty' && (
             <p>
-              {selectedMonth} dönemi için henüz kayıt girilmedi. Sol taraftaki işlem formundan harcama ve gelir ekleyebilirsiniz.
+              {isAllTime
+                ? 'Sistemde henüz kayıtlı işlem bulunmuyor. Sol taraftaki işlem formundan harcama ve gelir ekleyebilirsiniz.'
+                : `${selectedMonth} dönemi için henüz kayıt girilmedi. Sol taraftaki işlem formundan harcama ve gelir ekleyebilirsiniz.`}
             </p>
           )}
           {status === 'balanced' && (

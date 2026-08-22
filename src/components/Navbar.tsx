@@ -7,7 +7,8 @@ import {
   Layers,
   TrendingUp,
   Calendar,
-  Database
+  Database,
+  Globe
 } from 'lucide-react';
 import { GasConfig, ViewMode } from '../types';
 
@@ -36,30 +37,48 @@ export const Navbar: React.FC<NavbarProps> = ({
   onExportHtml,
   onExportCsv,
 }) => {
+  const isAllTime = selectedMonth === 'all';
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
   // Navigation helpers for month
   const handlePrevMonth = () => {
-    const [y, m] = selectedMonth.split('-').map(Number);
+    let base = selectedMonth;
+    if (base === 'all') {
+      base = currentMonthStr;
+    }
+    const [y, m] = base.split('-').map(Number);
     const prevDate = new Date(y, m - 2, 1);
     const prevMonthStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
     setSelectedMonth(prevMonthStr);
   };
 
   const handleNextMonth = () => {
-    const [y, m] = selectedMonth.split('-').map(Number);
+    let base = selectedMonth;
+    if (base === 'all') {
+      base = currentMonthStr;
+    }
+    const [y, m] = base.split('-').map(Number);
     const nextDate = new Date(y, m, 1);
     const nextMonthStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
     setSelectedMonth(nextMonthStr);
   };
 
   const handleCurrentMonth = () => {
-    const now = new Date();
-    setSelectedMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    setSelectedMonth(currentMonthStr);
+  };
+
+  const handleAllTime = () => {
+    setSelectedMonth('all');
   };
 
   // Format month name in Turkish
-  const [year, monthNum] = selectedMonth.split('-').map(Number);
-  const monthDate = new Date(year, monthNum - 1, 1);
-  const formattedMonth = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+  let formattedMonth = 'Tüm Zamanlar';
+  if (!isAllTime) {
+    const [year, monthNum] = selectedMonth.split('-').map(Number);
+    const monthDate = new Date(year, (monthNum || 1) - 1, 1);
+    formattedMonth = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+  }
 
   return (
     <header className="sticky top-0 z-30 bg-zinc-950 border-b border-zinc-800 px-4 sm:px-8 py-4 transition-all">
@@ -95,8 +114,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Center: Technical Month Selector */}
-        <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-2 py-1.5 rounded-xl">
+        {/* Center: Technical Month Selector with Tümü Option */}
+        <div className="flex flex-wrap items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-2 py-1.5 rounded-xl">
           <button
             onClick={handlePrevMonth}
             className="w-7 h-7 flex items-center justify-center text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition"
@@ -104,9 +123,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             ‹
           </button>
-          <div className="flex items-center gap-2 px-2 text-xs font-mono font-bold text-zinc-200 uppercase tracking-tight min-w-[130px] justify-center">
-            <Calendar className="w-3.5 h-3.5 text-blue-500" />
-            <span>{formattedMonth}</span>
+          <div className="flex items-center gap-2 px-2 text-xs font-mono font-bold text-zinc-200 uppercase tracking-tight min-w-[140px] justify-center">
+            {isAllTime ? (
+              <>
+                <Globe className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                <span className="text-blue-400">TÜM ZAMANLAR</span>
+              </>
+            ) : (
+              <>
+                <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                <span>{formattedMonth}</span>
+              </>
+            )}
           </div>
           <button
             onClick={handleNextMonth}
@@ -115,11 +143,34 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             ›
           </button>
+          
+          <div className="h-4 w-px bg-zinc-800 mx-1"></div>
+
+          {/* Bu Ay Button */}
           <button
             onClick={handleCurrentMonth}
-            className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition ml-1 border border-zinc-700"
+            className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg transition border ${
+              !isAllTime && selectedMonth === currentMonthStr
+                ? 'bg-blue-600/30 text-blue-400 border-blue-500/50'
+                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+            }`}
+            title="Mevcut Aya Git"
           >
             Bu Ay
+          </button>
+
+          {/* Tümü (All Time) Button */}
+          <button
+            onClick={handleAllTime}
+            className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg transition border flex items-center gap-1 ${
+              isAllTime
+                ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-900/30'
+                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+            }`}
+            title="Başlangıçtan bu yana tüm gelir-gider dengesini göster"
+          >
+            <Globe className="w-3 h-3" />
+            <span>Tümü</span>
           </button>
         </div>
 

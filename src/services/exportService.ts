@@ -171,6 +171,7 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                         </div>
                         <div class="flex items-center gap-2 bg-zinc-800/80 p-1 rounded-xl border border-zinc-700">
                             <input type="month" id="selectedMonth" class="bg-transparent text-xs font-semibold text-zinc-100 px-2 py-1 outline-none">
+                            <button type="button" id="allTimeBtn" onclick="toggleAllTime()" class="text-[10px] uppercase font-bold px-2 py-1 bg-zinc-900 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition">Tümü</button>
                         </div>
                     </div>
 
@@ -334,10 +335,18 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
 
         const DEFAULT_TEMPLATES = ${templatesJson};
 
+        function getLocalDateStr(d) {
+            d = d || new Date();
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
-            const now = new Date();
-            document.getElementById('txDate').value = now.toISOString().substring(0, 10);
-            document.getElementById('selectedMonth').value = now.toISOString().substring(0, 7);
+            const todayStr = getLocalDateStr();
+            document.getElementById('txDate').value = todayStr;
+            document.getElementById('selectedMonth').value = todayStr.substring(0, 7);
 
             document.getElementById('selectedMonth').addEventListener('change', updateAnalysis);
 
@@ -598,7 +607,7 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
         function resetForm() {
             document.getElementById('txForm').reset();
             document.getElementById('txId').value = '';
-            document.getElementById('txDate').value = new Date().toISOString().substring(0, 10);
+            document.getElementById('txDate').value = getLocalDateStr();
             document.getElementById('btnText').innerText = 'Kaydet';
             document.getElementById('cancelEditBtn').classList.add('hidden');
         }
@@ -720,12 +729,30 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             });
         }
 
+        let isAllTimeMode = false;
+
+        function toggleAllTime() {
+            isAllTimeMode = !isAllTimeMode;
+            const btn = document.getElementById('allTimeBtn');
+            const input = document.getElementById('selectedMonth');
+            if (isAllTimeMode) {
+                btn.className = 'text-[10px] uppercase font-bold px-2 py-1 bg-blue-600 text-white rounded-lg border border-blue-500 shadow transition';
+                input.disabled = true;
+                input.classList.add('opacity-40');
+            } else {
+                btn.className = 'text-[10px] uppercase font-bold px-2 py-1 bg-zinc-900 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition';
+                input.disabled = false;
+                input.classList.remove('opacity-40');
+            }
+            updateAnalysis();
+        }
+
         function updateAnalysis() {
             const month = document.getElementById('selectedMonth').value;
             let income = 0, card = 0, transfer = 0, cash = 0, other = 0;
 
             transactions.forEach(t => {
-                if (t.date && t.date.substring(0, 7) === month) {
+                if (isAllTimeMode || (t.date && t.date.substring(0, 7) === month)) {
                     const amt = parseFloat(t.amount) || 0;
                     if (t.category === 'Sabit Gelir' || t.category === 'Ek Gelir') {
                         income += amt;
@@ -758,18 +785,22 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             if (income === 0 && totalExpense === 0) {
                 netEl.className = 'text-lg font-bold font-mono text-zinc-400';
                 adviceCard.className = 'p-4 rounded-xl border border-zinc-800 bg-zinc-950/40 text-xs space-y-1';
-                adviceTitle.innerHTML = '<span>ℹ️</span> <span>Bu Ay İçin Kayıt Yok</span>';
-                adviceDesc.innerText = 'Seçilen ay için henüz gelir veya harcama girilmedi.';
+                adviceTitle.innerHTML = '<span>ℹ️</span> <span>Kayıt Yok</span>';
+                adviceDesc.innerText = isAllTimeMode ? 'Sistemde henüz kayıtlı gelir veya harcama yok.' : 'Seçilen ay için henüz gelir veya harcama girilmedi.';
             } else if (net >= 0) {
                 netEl.className = 'text-lg font-bold font-mono text-emerald-400';
                 adviceCard.className = 'p-4 rounded-xl border border-emerald-900/60 bg-emerald-950/30 text-xs space-y-1';
-                adviceTitle.innerHTML = '<span class="text-emerald-400">✅ GELİRDEN KARŞILANDI</span>';
-                adviceDesc.innerText = \`Tüm harcamalarınız gelirden karşılandı. Kalan \${formatTRY(net)} tutarını birikim fonunuza aktarabilirsiniz.\`;
+                adviceTitle.innerHTML = isAllTimeMode ? '<span class="text-emerald-400">✅ KÜMÜLATİF ARTI BAKİYE</span>' : '<span class="text-emerald-400">✅ GELİRDEN KARŞILANDI</span>';
+                adviceDesc.innerText = isAllTimeMode
+                    ? \`Başlangıçtan bu yana tüm harcamalarınız gelirlerinizden karşılandı. Kümülatif net birikiminiz: \${formatTRY(net)}.\`
+                    : \`Tüm harcamalarınız gelirden karşılandı. Kalan \${formatTRY(net)} tutarını birikim fonunuza aktarabilirsiniz.\`;
             } else {
                 netEl.className = 'text-lg font-bold font-mono text-rose-400';
                 adviceCard.className = 'p-4 rounded-xl border border-rose-900/60 bg-rose-950/30 text-xs space-y-1';
-                adviceTitle.innerHTML = '<span class="text-rose-400">⚠️ BİRİKİMDEN HARCANDI</span>';
-                adviceDesc.innerText = \`Aylık gelir harcamaları karşılamadı. Açığı kapatmak için birikimden \${formatTRY(Math.abs(net))} harcama yapıldı.\`;
+                adviceTitle.innerHTML = isAllTimeMode ? '<span class="text-rose-400">⚠️ KÜMÜLATİF NET AÇIK</span>' : '<span class="text-rose-400">⚠️ BİRİKİMDEN HARCANDI</span>';
+                adviceDesc.innerText = isAllTimeMode
+                    ? \`Başlangıçtan bu yana toplam harcamalarınız gelirlerinizi aştı. Toplam kümülatif açık: \${formatTRY(Math.abs(net))}.\`
+                    : \`Aylık gelir harcamaları karşılamadı. Açığı kapatmak için birikimden \${formatTRY(Math.abs(net))} harcama yapıldı.\`;
             }
 
             // Dağılım Çubuğu
