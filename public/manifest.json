@@ -1,0 +1,21 @@
+{
+  "id": "nakit-akis-birikim-app",
+  "name": "Nakit Akışı & Birikim Takip",
+  "short_name": "Nakit Akış",
+  "description": "Google E-Tablolar Entegre Aylık Nakit Akışı, Harcama ve Birikim Takip Uygulaması",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "categories": ["finance", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

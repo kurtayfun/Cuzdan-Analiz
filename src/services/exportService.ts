@@ -32,15 +32,26 @@ export function formatDateTR(dateStr: string): string {
   }
 }
 
-export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: QuickTemplate[]): string {
+export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: QuickTemplate[], defaultPin = ''): string {
   const templatesJson = JSON.stringify(initialTemplates || DEFAULT_QUICK_TEMPLATES);
 
   return `<!DOCTYPE html>
 <html lang="tr" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aylık Nakit Akış & Birikim Takip</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nakit Akışı ve Birikim Takip | Güvenli & PWA</title>
+    
+    <!-- PWA & Mobile Web App Meta Tags -->
+    <meta name="theme-color" content="#09090b">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Nakit Akış">
+    
+    <!-- Inline PWA Manifest Data URI -->
+    <link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22Nakit%20Ak%C4%B1%C5%9F%C4%B1%20ve%20Birikim%22%2C%22short_name%22%3A%22Nakit%20Ak%C4%B1%C5%9F%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%2309090b%22%2C%22theme_color%22%3A%22%2309090b%22%7D">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -49,49 +60,143 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         .spinner { border-top-color: transparent; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+        .animate-shake { animation: shake 0.35s ease-in-out; }
     </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-4 md:p-8">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-3 sm:p-6 md:p-8 selection:bg-blue-600 selection:text-white">
 
-    <div class="max-w-6xl mx-auto space-y-6">
+    <!-- ========================================== -->
+    <!-- 🔒 GÜVENLİK VE PIN KİLİT EKRANI (LOCK SCREEN) -->
+    <!-- ========================================== -->
+    <div id="lockScreen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/95 backdrop-blur-xl">
+        <div class="relative w-full max-w-sm bg-zinc-900 border border-zinc-800 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-5">
+            <div class="flex flex-col items-center text-center space-y-2">
+                <div class="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 text-2xl shadow-lg shadow-blue-950">
+                    🔒
+                </div>
+                <div>
+                    <h1 id="lockTitle" class="text-lg font-bold tracking-tight text-zinc-100 uppercase">
+                        Cüzdan Analiz Koruması
+                    </h1>
+                    <p id="lockSubtitle" class="text-xs text-zinc-500 font-mono mt-0.5">
+                        Kayıtlarınıza erişmek için PIN girin
+                    </p>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <div class="relative flex items-center">
+                    <input type="password" id="pinInput" inputmode="numeric" maxlength="12" placeholder="••••"
+                        class="w-full bg-zinc-950 border border-zinc-700/80 rounded-2xl py-3 px-4 text-center text-xl font-bold font-mono tracking-widest text-zinc-100 outline-none focus:border-blue-500 shadow-inner">
+                    <button type="button" onclick="togglePinVisibility()" class="absolute right-3 p-2 text-zinc-500 hover:text-zinc-300">
+                        👁️
+                    </button>
+                </div>
+
+                <div id="lockError" class="hidden text-xs text-rose-400 font-medium text-center animate-shake">
+                    Hatalı PIN Kodu!
+                </div>
+
+                <!-- Tuş Takımı (Numpad) -->
+                <div class="grid grid-cols-3 gap-2 pt-1">
+                    <button type="button" onclick="pressKey('1')" class="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-blue-600 font-mono text-lg font-bold">1</button>
+                    <button type="button" onclick="pressKey('2')" class="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-blue-600 font-mono text-lg font-bold">2</button>
+                    <button type="button" onclick="pressKey('3')" class="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-blue-600 font-mono text-lg font-bold">3</button>
+                    <button type="button" onclick="pressKey('4')" class="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-blue-600 font-mono text-lg font-bold">4</button>
+                    <button type="button" onclick="pressKey('5')" class="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-blue-600 font-mono text-lg font-bold">5</button>
+                    <button type="button" onclick="pressKey('6')" class="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-blue-600 font-mono text-lg font-bold">6</button>
+                    <button type="button" onclick="pressKey('7')" class="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-blue-600 font-mono text-lg font-bold">7</button>
+                    <button type="button" onclick="pressKey('8')" class="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-blue-600 font-mono text-lg font-bold">8</button>
+                    <button type="button" onclick="pressKey('9')" class="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-blue-600 font-mono text-lg font-bold">9</button>
+                    <button type="button" onclick="clearPin()" class="h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-xs font-bold text-zinc-400">SİL</button>
+                    <button type="button" onclick="pressKey('0')" class="h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-blue-600 font-mono text-lg font-bold">0</button>
+                    <button type="button" onclick="deletePin()" class="h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-sm font-bold text-zinc-400">⌫</button>
+                </div>
+
+                <label class="flex items-center justify-center gap-2 cursor-pointer pt-1 text-xs text-zinc-400 select-none">
+                    <input type="checkbox" id="rememberDeviceCheck" checked class="rounded bg-zinc-800 border-zinc-700 text-blue-600">
+                    <span>Bu cihazda beni hatırla</span>
+                </label>
+
+                <button type="button" onclick="submitUnlock()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-2xl text-xs uppercase tracking-wider transition shadow-lg shadow-blue-950">
+                    Kilidi Aç / Giriş Yap
+                </button>
+            </div>
+
+            <div class="text-center pt-2 border-t border-zinc-800/80">
+                <p class="text-[10px] text-zinc-500">
+                    🛡️ GitHub Pages üzerinde verileriniz PIN olmadan görüntülenemez.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- ANA UYGULAMA İÇERİĞİ -->
+    <!-- ========================================== -->
+    <div id="mainApp" class="max-w-6xl mx-auto space-y-6 opacity-0 transition-opacity duration-300">
         <!-- Üst Başlık & Kontroller -->
-        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl">
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-zinc-900/80 border border-zinc-800 p-4 sm:p-5 rounded-2xl">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-lg">
+                <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-lg">
                     ₺
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold tracking-tight">Nakit Akışı & Birikim Takibi</h1>
-                    <p class="text-zinc-400 text-xs">Google E-Tablolar Entegre Nakit Esaslı Bütçe</p>
+                    <h1 class="text-xl font-bold tracking-tight text-white uppercase">Cüzdan <span class="text-blue-500">Analiz</span></h1>
+                    <p class="text-zinc-400 text-xs">Google E-Tablolar & PIN Korumalı Nakit Takibi</p>
                 </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
                 <span id="gasStatusBadge" class="text-xs px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-400 border border-zinc-700">
                     Yerel Mod
                 </span>
+                <button onclick="lockAppNow()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 border border-zinc-700" title="Uygulamayı Kilitle">
+                    🔒 Kilitle
+                </button>
                 <button onclick="toggleSettings()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 border border-zinc-700">
-                    ⚙️ Apps Script URL
+                    ⚙️ Ayarlar & PIN
+                </button>
+                <button onclick="fetchData()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-blue-950">
+                    🔄 Yenile
                 </button>
             </div>
         </header>
 
         <!-- Ayarlar Paneli (Gizli / Açılır) -->
-        <div id="settingsArea" class="hidden bg-zinc-900 border border-zinc-800 p-5 rounded-2xl space-y-3">
-            <div class="flex justify-between items-center">
-                <h3 class="font-bold text-sm text-zinc-200">Google Apps Script Web Uygulaması URL</h3>
+        <div id="settingsArea" class="hidden bg-zinc-900 border border-zinc-800 p-5 rounded-2xl space-y-4">
+            <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
+                <h3 class="font-bold text-sm text-zinc-200">Entegrasyon ve Güvenlik Ayarları</h3>
                 <span class="text-[11px] text-zinc-500">Tarayıcınızın yerel hafızasında saklanır</span>
             </div>
-            <div class="flex flex-col sm:flex-row gap-2">
-                <input type="text" id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec" 
-                    value="${defaultGasUrl}"
-                    class="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs text-zinc-100 outline-none focus:border-emerald-500">
-                <button onclick="saveSettings()" class="bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 rounded-xl text-xs font-bold text-white transition">
-                    Kaydet & Bağlan
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Google Apps Script Web App URL</label>
+                    <input type="text" id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec" 
+                        value="${defaultGasUrl}"
+                        class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs text-zinc-100 outline-none focus:border-blue-500 font-mono">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Güvenlik PIN Kodu</label>
+                    <input type="password" id="settingsPin" placeholder="Örn: 1923" 
+                        value="${defaultPin}"
+                        class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs text-zinc-100 outline-none focus:border-blue-500 font-mono">
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center pt-2">
+                <p class="text-[11px] text-zinc-400">
+                    💡 GitHub Public depoya atarken bu sayfadaki veriler ziyaretçilerin cihazında sorulur ve güvende kalır.
+                </p>
+                <button onclick="saveSettings()" class="bg-blue-600 hover:bg-blue-500 px-5 py-2.5 rounded-xl text-xs font-bold text-white transition">
+                    Kaydet & Uygula
                 </button>
             </div>
-            <p class="text-[11px] text-zinc-400">
-                💡 Apps Script'i yayınlarken "Erişimi Olanlar" kısmını <strong>"Herkes (Anyone)"</strong> olarak seçtiğinizden emin olun.
-            </p>
         </div>
 
         <!-- Ana Grid: Form & Analiz -->
@@ -103,16 +208,14 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                         <span>➕</span> Yeni İşlem Girişi
                     </h2>
                     <button type="button" onclick="openTemplateManager()" class="text-[11px] text-blue-400 hover:text-blue-300 transition flex items-center gap-1 hover:underline">
-                        <span>⚙️ Şablonları Özelleştir</span>
+                        <span>⚙️ Şablonlar</span>
                     </button>
                 </div>
 
-                <!-- Hızlı Şablon Butonları (Dinamik) -->
+                <!-- Hızlı Şablon Butonları -->
                 <div class="space-y-1.5">
                     <label class="block text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Hızlı Şablonlar</label>
-                    <div id="quickTemplatesGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px]">
-                        <!-- JS ile doldurulacak -->
-                    </div>
+                    <div id="quickTemplatesGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px]"></div>
                 </div>
 
                 <form id="txForm" class="space-y-3.5 pt-2 border-t border-zinc-800/80">
@@ -121,11 +224,11 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Tarih</label>
-                            <input type="date" id="txDate" required class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs outline-none focus:border-emerald-500">
+                            <input type="date" id="txDate" required class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs outline-none focus:border-blue-500">
                         </div>
                         <div>
                             <label class="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Kategori</label>
-                            <select id="txCategory" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs outline-none focus:border-emerald-500">
+                            <select id="txCategory" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs outline-none focus:border-blue-500">
                                 <option value="Sabit Gelir">Sabit Gelir (+)</option>
                                 <option value="Ek Gelir">Ek Gelir (+)</option>
                                 <option value="Kart Ekstresi">Kredi Kartı Ekstresi (-)</option>
@@ -140,17 +243,17 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                         <label class="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Tutar (₺)</label>
                         <div class="relative">
                             <span class="absolute left-3 top-2.5 text-zinc-500 text-xs font-bold">₺</span>
-                            <input type="number" step="0.01" id="txAmount" required placeholder="0.00" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-2.5 pl-8 pr-3 text-sm font-semibold outline-none focus:border-emerald-500 font-mono">
+                            <input type="number" step="0.01" id="txAmount" required placeholder="0.00" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-2.5 pl-8 pr-3 text-sm font-semibold outline-none focus:border-blue-500 font-mono">
                         </div>
                     </div>
 
                     <div>
                         <label class="block text-[11px] font-bold text-zinc-400 uppercase mb-1">Açıklama / Not</label>
-                        <input type="text" id="txNote" placeholder="Örn: Garanti bonus ekstre, kira bedeli..." class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs outline-none focus:border-emerald-500">
+                        <input type="text" id="txNote" placeholder="Örn: Garanti bonus ekstre, kira bedeli..." class="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs outline-none focus:border-blue-500">
                     </div>
 
                     <div class="pt-1 flex gap-2">
-                        <button type="submit" id="submitBtn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-bold text-xs text-white transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950">
+                        <button type="submit" id="submitBtn" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold text-xs text-white transition flex items-center justify-center gap-2 shadow-lg shadow-blue-950">
                             <span id="btnText">Kaydet</span>
                             <div id="btnSpinner" class="hidden w-4 h-4 border-2 border-white spinner rounded-full animate-spin"></div>
                         </button>
@@ -166,12 +269,12 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                 <div class="bg-zinc-900/90 border border-zinc-800 p-6 rounded-2xl space-y-5">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-zinc-800 pb-4">
                         <div>
-                            <h2 class="font-bold text-sm text-zinc-200">Aylık Konsolide Analiz</h2>
-                            <p class="text-zinc-500 text-xs">Seçili ayın toplam nakit akışı ve tasarruf dengesi</p>
+                            <h2 class="font-bold text-sm text-zinc-200 uppercase">Konsolide Nakit Analizi</h2>
+                            <p class="text-zinc-500 text-xs">Seçili dönemin toplam nakit akışı ve tasarruf dengesi</p>
                         </div>
                         <div class="flex items-center gap-2 bg-zinc-800/80 p-1 rounded-xl border border-zinc-700">
                             <input type="month" id="selectedMonth" class="bg-transparent text-xs font-semibold text-zinc-100 px-2 py-1 outline-none">
-                            <button type="button" id="allTimeBtn" onclick="toggleAllTime()" class="text-[10px] uppercase font-bold px-2 py-1 bg-zinc-900 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition">Tümü</button>
+                            <button type="button" id="allTimeBtn" onclick="toggleAllTime()" class="text-[10px] uppercase font-bold px-2.5 py-1 bg-zinc-900 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition">Tümü</button>
                         </div>
                     </div>
 
@@ -207,9 +310,7 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                             <span>Gider Kalemleri Dağılımı</span>
                             <span id="expenseBreakdownText">-</span>
                         </div>
-                        <div class="h-2.5 w-full bg-zinc-800 rounded-full overflow-hidden flex" id="distributionBar">
-                            <!-- JS Bar Segmentleri -->
-                        </div>
+                        <div class="h-2.5 w-full bg-zinc-800 rounded-full overflow-hidden flex" id="distributionBar"></div>
                         <div class="flex flex-wrap gap-3 text-[10px] text-zinc-400 pt-1">
                             <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Kart</div>
                             <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500"></span> Transfer</div>
@@ -221,24 +322,20 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             </section>
         </div>
 
-        <!-- Alt: İşlem Listesi Tablosu -->
-        <section class="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden space-y-3 p-5">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div>
-                    <h3 class="font-bold text-sm text-zinc-200">İşlem Geçmişi & Kayıtlar</h3>
-                    <p class="text-zinc-500 text-xs">Tüm tarih bazlı nakit hareketleri</p>
+        <!-- İşlem Listesi Tablosu -->
+        <section class="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden">
+            <div class="p-4 sm:p-5 border-b border-zinc-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <h2 class="font-bold text-sm text-zinc-100 uppercase tracking-tight">İşlem Geçmişi</h2>
+                    <span id="txCountBadge" class="text-[11px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-mono">0 Kayıt</span>
                 </div>
-                <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <input type="text" id="searchInput" oninput="filterTable()" placeholder="Açıklama veya kategori ara..." class="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs outline-none w-full sm:w-56 focus:border-emerald-500">
-                    <button onclick="fetchData()" class="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-300 border border-zinc-700 whitespace-nowrap">
-                        🔄 Yenile
-                    </button>
-                </div>
+                <input type="text" id="searchInput" oninput="filterTable()" placeholder="Kayıtlarda ara..." 
+                    class="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs text-zinc-100 outline-none focus:border-blue-500 w-full sm:w-64">
             </div>
 
-            <div class="overflow-x-auto rounded-xl border border-zinc-800/80">
+            <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs">
-                    <thead class="bg-zinc-950 text-zinc-400 font-semibold border-b border-zinc-800">
+                    <thead class="bg-zinc-950/60 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
                         <tr>
                             <th class="p-3.5">Tarih</th>
                             <th class="p-3.5">Kategori</th>
@@ -247,289 +344,207 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                             <th class="p-3.5 text-center">İşlem</th>
                         </tr>
                     </thead>
-                    <tbody id="tableBody" class="divide-y divide-zinc-800/60 bg-zinc-950/40">
-                        <!-- JS ile doldurulacak -->
-                    </tbody>
+                    <tbody id="tableBody" class="divide-y divide-zinc-800/60 font-medium"></tbody>
                 </table>
             </div>
         </section>
     </div>
 
-    <!-- Şablon Yönetim Modalı (Modal / Popup) -->
-    <div id="templateManagerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-950">
-                <div>
-                    <h3 class="font-bold text-sm text-zinc-100 uppercase">Hızlı Şablon Yönetimi</h3>
-                    <p class="text-[10px] text-zinc-500 font-mono">Şablon Ekle, Düzenle ve Özelleştir</p>
-                </div>
-                <button onclick="closeTemplateManager()" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white">✕</button>
+    <!-- Şablon Yöneticisi Modal -->
+    <div id="tplModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl">
+            <div class="flex justify-between items-center p-4 border-b border-zinc-800 bg-zinc-950">
+                <h3 class="font-bold text-sm text-zinc-100">Şablon Yöneticisi</h3>
+                <button onclick="closeTemplateManager()" class="text-zinc-400 hover:text-white">✕</button>
             </div>
-
-            <div class="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
-                <!-- Şablon Ekleme Formu -->
-                <form id="tplForm" onsubmit="handleSaveTemplate(event)" class="bg-zinc-950 border border-blue-500/40 p-4 rounded-xl space-y-3">
+            <div class="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
+                <div id="tplList" class="space-y-2"></div>
+                <form id="tplForm" onsubmit="saveCustomTemplate(event)" class="bg-zinc-950 border border-zinc-800 p-4 rounded-xl space-y-3">
+                    <h4 class="font-bold text-xs text-blue-400" id="tplFormHeading">Yeni Şablon Ekle</h4>
                     <input type="hidden" id="tplId">
-                    <div class="flex justify-between items-center border-b border-zinc-800 pb-2">
-                        <span id="tplFormHeading" class="font-bold text-[11px] uppercase tracking-wider text-blue-400 font-mono">Yeni Şablon Ekle</span>
-                        <button type="button" onclick="resetTplForm()" class="text-zinc-500 hover:text-zinc-300 text-[11px]">Temizle</button>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div>
-                            <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Buton Başlığı (Kısa)</label>
-                            <input type="text" id="tplTitle" required placeholder="Örn: - Kredi veya - Borç" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs outline-none focus:border-blue-500 font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Kategori</label>
-                            <select id="tplCategory" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs outline-none focus:border-blue-500">
-                                <option value="Sabit Gelir">Sabit Gelir (+)</option>
-                                <option value="Ek Gelir">Ek Gelir (+)</option>
-                                <option value="Kart Ekstresi">Kart Ekstresi (-)</option>
-                                <option value="Transfer Gideri" selected>Transfer Gideri (-)</option>
-                                <option value="Nakit Çekim">Nakit Çekim (-)</option>
-                                <option value="Diğer Gider">Diğer Gider (-)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div>
-                            <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Otomatik Açıklama</label>
-                            <input type="text" id="tplNote" placeholder="Örn: Banka Kredi Taksiti" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Sabit Tutar (Opsiyonel)</label>
-                            <input type="number" step="0.01" id="tplAmount" placeholder="Örn: 5000" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs outline-none focus:border-blue-500 font-mono">
-                        </div>
-                    </div>
-                    <div class="flex justify-end gap-2 pt-1">
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-1.5 rounded-lg text-xs uppercase tracking-wider transition">
-                            Kaydet
-                        </button>
-                    </div>
+                    <input type="text" id="tplTitle" placeholder="Şablon Başlığı (Örn: Kira, Fatura)" required class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
+                    <select id="tplCategory" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
+                        <option value="Transfer Gideri">Transfer Gideri</option>
+                        <option value="Kart Ekstresi">Kart Ekstresi</option>
+                        <option value="Nakit Çekim">Nakit Çekim</option>
+                        <option value="Sabit Gelir">Sabit Gelir</option>
+                        <option value="Ek Gelir">Ek Gelir</option>
+                        <option value="Diğer Gider">Diğer Gider</option>
+                    </select>
+                    <input type="text" id="tplNote" placeholder="Varsayılan Açıklama" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
+                    <input type="number" step="0.01" id="tplAmount" placeholder="Varsayılan Tutar (Opsiyonel)" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-lg text-xs font-bold text-white">Kaydet</button>
                 </form>
-
-                <!-- Mevcut Şablonlar Listesi -->
-                <div class="space-y-2">
-                    <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Kayıtlı Şablonlar</span>
-                        <button type="button" onclick="resetDefaultTemplates()" class="text-[10px] text-zinc-400 hover:text-zinc-200 underline">Varsayılanlara Sıfırla</button>
-                    </div>
-                    <div id="tplListContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <!-- JS ile doldurulacak -->
-                    </div>
-                </div>
-            </div>
-
-            <div class="flex items-center justify-end px-6 py-3 border-t border-zinc-800 bg-zinc-950">
-                <button onclick="closeTemplateManager()" class="px-4 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold uppercase tracking-wider">
-                    Kapat
-                </button>
             </div>
         </div>
     </div>
 
+    <!-- ========================================== -->
+    <!-- UYGULAMA MANTIĞI & GÜVENLİK SCRIPTİ -->
+    <!-- ========================================== -->
     <script>
-        let GAS_URL = localStorage.getItem('gas_url_v2') || '${defaultGasUrl}';
-        let transactions = [];
-        let quickTemplates = [];
+        let GAS_URL = localStorage.getItem('gas_url_v2') || "${defaultGasUrl}";
+        let STORED_PIN = localStorage.getItem('cashflow_security_pin_v2') || "${defaultPin}";
+        let IS_REMEMBERED = localStorage.getItem('cashflow_remember_device_v2') === 'true';
+        let IS_UNLOCKED = sessionStorage.getItem('cashflow_session_unlocked_v2') === 'true' || (IS_REMEMBERED && localStorage.getItem('cashflow_session_unlocked_v2') === 'true');
 
+        let transactions = JSON.parse(localStorage.getItem('local_tx_v2') || '[]');
         const DEFAULT_TEMPLATES = ${templatesJson};
+        let quickTemplates = JSON.parse(localStorage.getItem('local_tpls_v2') || JSON.stringify(DEFAULT_TEMPLATES));
 
-        function getLocalDateStr(d) {
-            d = d || new Date();
+        let isAllTimeMode = false;
+
+        function getLocalDateStr(d = new Date()) {
             const y = d.getFullYear();
             const m = String(d.getMonth() + 1).padStart(2, '0');
             const day = String(d.getDate()).padStart(2, '0');
-            return y + '-' + m + '-' + day;
+            return \`\${y}-\${m}-\${day}\`;
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const todayStr = getLocalDateStr();
-            document.getElementById('txDate').value = todayStr;
-            document.getElementById('selectedMonth').value = todayStr.substring(0, 7);
+        // ==========================================
+        // PIN & GÜVENLİK KONTROLLERİ
+        // ==========================================
+        function checkInitialLock() {
+            if (!STORED_PIN) {
+                // PIN ayarlanmamışsa, kullanıcıdan PIN oluşturmasını iste veya direkt aç
+                document.getElementById('lockTitle').innerText = 'Güvenlik PIN Kodu Belirleyin';
+                document.getElementById('lockSubtitle').innerText = 'Verilerinizi korumak için 4 haneli PIN belirleyin';
+            }
+
+            if (IS_UNLOCKED && STORED_PIN) {
+                revealApp();
+            } else {
+                document.getElementById('lockScreen').classList.remove('hidden');
+                document.getElementById('pinInput').focus();
+            }
+        }
+
+        function revealApp() {
+            document.getElementById('lockScreen').classList.add('hidden');
+            const main = document.getElementById('mainApp');
+            main.classList.remove('opacity-0');
+            main.classList.add('opacity-100');
+            initApp();
+        }
+
+        function pressKey(num) {
+            const input = document.getElementById('pinInput');
+            if (input.value.length < 12) {
+                input.value += num;
+                document.getElementById('lockError').classList.add('hidden');
+            }
+        }
+
+        function deletePin() {
+            const input = document.getElementById('pinInput');
+            input.value = input.value.slice(0, -1);
+            document.getElementById('lockError').classList.add('hidden');
+        }
+
+        function clearPin() {
+            document.getElementById('pinInput').value = '';
+            document.getElementById('lockError').classList.add('hidden');
+        }
+
+        function togglePinVisibility() {
+            const input = document.getElementById('pinInput');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        function submitUnlock() {
+            const pinVal = document.getElementById('pinInput').value.trim();
+            const remember = document.getElementById('rememberDeviceCheck').checked;
+
+            if (!pinVal) {
+                showLockError('Lütfen bir PIN girin.');
+                return;
+            }
+
+            if (!STORED_PIN) {
+                // Yeni PIN olarak kaydet
+                STORED_PIN = pinVal;
+                localStorage.setItem('cashflow_security_pin_v2', pinVal);
+                localStorage.setItem('cashflow_pin_enabled_v2', 'true');
+            }
+
+            if (pinVal === STORED_PIN) {
+                IS_UNLOCKED = true;
+                sessionStorage.setItem('cashflow_session_unlocked_v2', 'true');
+                if (remember) {
+                    localStorage.setItem('cashflow_remember_device_v2', 'true');
+                    localStorage.setItem('cashflow_session_unlocked_v2', 'true');
+                } else {
+                    localStorage.removeItem('cashflow_remember_device_v2');
+                    localStorage.removeItem('cashflow_session_unlocked_v2');
+                }
+                revealApp();
+            } else {
+                showLockError('Hatalı PIN Kodu! Lütfen tekrar deneyin.');
+                document.getElementById('pinInput').value = '';
+            }
+        }
+
+        function showLockError(msg) {
+            const err = document.getElementById('lockError');
+            err.innerText = msg;
+            err.classList.remove('hidden');
+        }
+
+        function lockAppNow() {
+            sessionStorage.removeItem('cashflow_session_unlocked_v2');
+            localStorage.removeItem('cashflow_session_unlocked_v2');
+            IS_UNLOCKED = false;
+            document.getElementById('pinInput').value = '';
+            document.getElementById('lockScreen').classList.remove('hidden');
+            const main = document.getElementById('mainApp');
+            main.classList.remove('opacity-100');
+            main.classList.add('opacity-0');
+        }
+
+        // ==========================================
+        // UYGULAMA BAŞLANGIÇ
+        // ==========================================
+        function initApp() {
+            const now = new Date();
+            const monthStr = \`\${now.getFullYear()}-\${String(now.getMonth() + 1).padStart(2, '0')}\`;
+            document.getElementById('selectedMonth').value = monthStr;
+            document.getElementById('txDate').value = getLocalDateStr();
 
             document.getElementById('selectedMonth').addEventListener('change', updateAnalysis);
 
-            // Yerel şablonları yükle
-            loadTemplates();
-
-            // Yerel kayıtları yükle
-            const localRaw = localStorage.getItem('local_tx_v2');
-            if (localRaw) {
-                try { transactions = JSON.parse(localRaw); } catch(e) {}
-            }
+            renderQuickTemplates();
+            renderTable();
+            updateAnalysis();
 
             if (GAS_URL) {
-                document.getElementById('apiUrl').value = GAS_URL;
                 document.getElementById('gasStatusBadge').innerText = 'E-Tablo Bağlı';
                 document.getElementById('gasStatusBadge').className = 'text-xs px-2.5 py-1 rounded-lg bg-emerald-950/60 text-emerald-400 border border-emerald-800';
                 fetchData();
-            } else {
-                renderTable();
-                updateAnalysis();
             }
-        });
-
-        // Şablon Yönetimi
-        function loadTemplates() {
-            const raw = localStorage.getItem('cashflow_templates_v2');
-            if (raw) {
-                try {
-                    const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        quickTemplates = parsed;
-                    } else {
-                        quickTemplates = [...DEFAULT_TEMPLATES];
-                    }
-                } catch(e) {
-                    quickTemplates = [...DEFAULT_TEMPLATES];
-                }
-            } else {
-                quickTemplates = [...DEFAULT_TEMPLATES];
-            }
-            renderQuickTemplates();
-        }
-
-        function saveTemplates() {
-            localStorage.setItem('cashflow_templates_v2', JSON.stringify(quickTemplates));
-            renderQuickTemplates();
         }
 
         function renderQuickTemplates() {
-            const container = document.getElementById('quickTemplatesGrid');
-            if (!container) return;
-
-            container.innerHTML = quickTemplates.map(tpl => {
-                let colorClass = 'text-blue-400 border-zinc-800';
-                if (tpl.category === 'Sabit Gelir' || tpl.category === 'Ek Gelir') {
-                    colorClass = 'text-emerald-400 border-zinc-800';
-                } else if (tpl.category === 'Kart Ekstresi') {
-                    colorClass = 'text-rose-400 border-zinc-800';
-                } else if (tpl.category === 'Nakit Çekim') {
-                    colorClass = 'text-amber-400 border-zinc-800';
-                }
-                const safeTpl = JSON.stringify(tpl).replace(/'/g, "&#39;");
-                return \`
-                    <button type="button" onclick='applyTemplate(\${safeTpl})' 
-                        class="bg-zinc-950 hover:bg-zinc-800 p-2 rounded-lg border font-mono text-left transition \${colorClass}"
-                        title="\${tpl.category} - \${tpl.defaultNote || tpl.title}">
-                        <div class="font-bold truncate">\${tpl.title}</div>
-                        <div class="text-[9px] text-zinc-500 truncate font-sans">\${tpl.defaultNote || tpl.category}</div>
-                    </button>
-                \`;
-            }).join('');
+            const grid = document.getElementById('quickTemplatesGrid');
+            grid.innerHTML = quickTemplates.map(tpl => \`
+                <button type="button" onclick='applyTemplate(\${JSON.stringify(tpl)})'
+                    class="bg-zinc-800/80 hover:bg-zinc-700 active:bg-blue-600 p-2 rounded-xl border border-zinc-700/80 text-left transition flex flex-col justify-between truncate">
+                    <span class="font-bold text-zinc-200 truncate block">\${tpl.title}</span>
+                    <span class="text-[9px] text-zinc-400 truncate block">\${tpl.category}</span>
+                </button>
+            \`).join('');
         }
 
         function applyTemplate(tpl) {
             document.getElementById('txCategory').value = tpl.category;
-            document.getElementById('txNote').value = tpl.defaultNote || '';
-            if (tpl.defaultAmount && tpl.defaultAmount > 0) {
+            document.getElementById('txNote').value = tpl.defaultNote || tpl.title;
+            if (tpl.defaultAmount) {
                 document.getElementById('txAmount').value = tpl.defaultAmount;
             }
             document.getElementById('txAmount').focus();
         }
 
-        function openTemplateManager() {
-            document.getElementById('templateManagerModal').classList.remove('hidden');
-            renderTemplateListInModal();
-            resetTplForm();
-        }
-
-        function closeTemplateManager() {
-            document.getElementById('templateManagerModal').classList.add('hidden');
-        }
-
-        function renderTemplateListInModal() {
-            const list = document.getElementById('tplListContainer');
-            if (!list) return;
-
-            if (quickTemplates.length === 0) {
-                list.innerHTML = '<div class="col-span-2 text-center p-4 text-zinc-500 font-mono text-xs">Kayıtlı şablon bulunamadı.</div>';
-                return;
-            }
-
-            list.innerHTML = quickTemplates.map(tpl => {
-                const safeTpl = JSON.stringify(tpl).replace(/'/g, "&#39;");
-                return \`
-                    <div class="bg-zinc-950 border border-zinc-800 p-2.5 rounded-xl flex items-center justify-between gap-2">
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-center gap-1.5">
-                                <span class="font-bold text-xs text-zinc-100 font-mono">\${tpl.title}</span>
-                                <span class="text-[9px] px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono">\${tpl.category}</span>
-                            </div>
-                            <div class="text-[11px] text-zinc-400 truncate italic">\${tpl.defaultNote || '-'}</div>
-                            \${tpl.defaultAmount ? \`<div class="text-[10px] text-zinc-500 font-mono">Sabit: \${formatTRY(tpl.defaultAmount)}</div>\` : ''}
-                        </div>
-                        <div class="flex items-center gap-1">
-                            <button type="button" onclick='editTemplate(\${safeTpl})' class="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white" title="Düzenle">✏️</button>
-                            <button type="button" onclick='deleteTemplate("\${tpl.id}")' class="p-1 rounded bg-zinc-900 hover:bg-rose-950 text-zinc-500 hover:text-rose-400" title="Sil">🗑️</button>
-                        </div>
-                    </div>
-                \`;
-            }).join('');
-        }
-
-        function handleSaveTemplate(e) {
-            e.preventDefault();
-            const id = document.getElementById('tplId').value;
-            const title = document.getElementById('tplTitle').value.trim();
-            const category = document.getElementById('tplCategory').value;
-            const defaultNote = document.getElementById('tplNote').value.trim();
-            const amtVal = parseFloat(document.getElementById('tplAmount').value);
-            const defaultAmount = (!isNaN(amtVal) && amtVal > 0) ? amtVal : undefined;
-
-            if (!title) return;
-
-            if (id) {
-                // Edit
-                quickTemplates = quickTemplates.map(t => t.id === id ? { ...t, title, category, defaultNote, defaultAmount } : t);
-            } else {
-                // Add new
-                const newTpl = {
-                    id: 'tpl_' + Date.now(),
-                    title,
-                    category,
-                    defaultNote,
-                    defaultAmount
-                };
-                quickTemplates.push(newTpl);
-            }
-
-            saveTemplates();
-            renderTemplateListInModal();
-            resetTplForm();
-        }
-
-        function editTemplate(tpl) {
-            document.getElementById('tplId').value = tpl.id;
-            document.getElementById('tplTitle').value = tpl.title;
-            document.getElementById('tplCategory').value = tpl.category;
-            document.getElementById('tplNote').value = tpl.defaultNote || '';
-            document.getElementById('tplAmount').value = tpl.defaultAmount ? tpl.defaultAmount : '';
-            document.getElementById('tplFormHeading').innerText = 'Şablonu Düzenle';
-        }
-
-        function deleteTemplate(id) {
-            quickTemplates = quickTemplates.filter(t => t.id !== id);
-            saveTemplates();
-            renderTemplateListInModal();
-            resetTplForm();
-        }
-
-        function resetTplForm() {
-            document.getElementById('tplForm').reset();
-            document.getElementById('tplId').value = '';
-            document.getElementById('tplCategory').value = 'Transfer Gideri';
-            document.getElementById('tplFormHeading').innerText = 'Yeni Şablon Ekle';
-        }
-
-        function resetDefaultTemplates() {
-            if (confirm('Şablonları varsayılan ayarlara döndürmek istiyor musunuz?')) {
-                quickTemplates = [...DEFAULT_TEMPLATES];
-                saveTemplates();
-                renderTemplateListInModal();
-                resetTplForm();
-            }
+        function formatTRY(num) {
+            return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(num);
         }
 
         function toggleSettings() {
@@ -538,9 +553,17 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
 
         function saveSettings() {
             const url = document.getElementById('apiUrl').value.trim();
+            const pin = document.getElementById('settingsPin').value.trim();
+            
             localStorage.setItem('gas_url_v2', url);
             GAS_URL = url;
-            alert('Google Apps Script URL kaydedildi!');
+
+            if (pin) {
+                localStorage.setItem('cashflow_security_pin_v2', pin);
+                STORED_PIN = pin;
+            }
+
+            alert('Ayarlar başarıyla kaydedildi!');
             toggleSettings();
             if (GAS_URL) {
                 document.getElementById('gasStatusBadge').innerText = 'E-Tablo Bağlı';
@@ -549,7 +572,42 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             }
         }
 
-        // Form Submit (Ekle / Güncelle)
+        async function fetchData() {
+            if (!GAS_URL) return;
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-zinc-500 animate-pulse">Google E-Tablolardan veriler çekiliyor...</td></tr>';
+
+            let reqUrl = GAS_URL;
+            if (STORED_PIN) {
+                const sep = reqUrl.includes('?') ? '&' : '?';
+                reqUrl = \`\${reqUrl}\${sep}pin=\${encodeURIComponent(STORED_PIN)}\`;
+            }
+
+            try {
+                const res = await fetch(reqUrl);
+                const data = await res.json();
+                if (data && data.code === 'UNAUTHORIZED') {
+                    tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-rose-400 font-bold">⚠️ Google Apps Script PIN doğrulaması başarısız. Lütfen Code.gs PIN kodu ile ayarlarınızdaki PIN kodunu kontrol edin.</td></tr>';
+                    return;
+                }
+                if (Array.isArray(data)) {
+                    transactions = data.map(item => ({
+                        id: String(item.ID || item.rowId || ('ID_' + Math.random().toString(36).substring(2, 8))),
+                        date: typeof item.Tarih === 'string' ? item.Tarih.substring(0, 10) : getLocalDateStr(),
+                        category: item.Kategori,
+                        amount: Number(item.Tutar) || 0,
+                        note: item.Açıklama || ''
+                    }));
+                    localStorage.setItem('local_tx_v2', JSON.stringify(transactions));
+                    renderTable();
+                    updateAnalysis();
+                }
+            } catch(e) {
+                tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-rose-400">Veri çekilemedi. Apps Script URL veya internet bağlantısını kontrol edin.</td></tr>';
+            }
+        }
+
+        // Form Submit
         document.getElementById('txForm').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('txId').value;
@@ -572,17 +630,15 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                 note: note
             };
 
-            // Yerelde güncelle
             if (id) {
                 transactions = transactions.map(t => t.id === id ? newTx : t);
             } else {
                 transactions.unshift(newTx);
             }
-            saveLocal();
+            localStorage.setItem('local_tx_v2', JSON.stringify(transactions));
             renderTable();
             updateAnalysis();
 
-            // Google Sheets'e gönder
             if (GAS_URL) {
                 try {
                     await fetch(GAS_URL, {
@@ -591,7 +647,8 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             action: id ? 'update' : 'insert',
-                            ...newTx
+                            ...newTx,
+                            pin: STORED_PIN || undefined
                         })
                     });
                 } catch(err) {
@@ -629,7 +686,7 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             if (window.confirm && !confirm('Bu kaydı (' + promptNote + ') silmek istediğinize emin misiniz?')) return;
             
             transactions = transactions.filter(t => t.id !== id);
-            saveLocal();
+            localStorage.setItem('local_tx_v2', JSON.stringify(transactions));
             renderTable();
             updateAnalysis();
 
@@ -645,7 +702,8 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                             date: item ? item.date : undefined,
                             category: item ? item.category : undefined,
                             amount: item ? item.amount : undefined,
-                            note: item ? item.note : undefined
+                            note: item ? item.note : undefined,
+                            pin: STORED_PIN || undefined
                         })
                     });
                 } catch(e) {
@@ -654,41 +712,9 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             }
         }
 
-        function saveLocal() {
-            localStorage.setItem('local_tx_v2', JSON.stringify(transactions));
-        }
-
-        async function fetchData() {
-            if (!GAS_URL) return;
-            const tbody = document.getElementById('tableBody');
-            tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-zinc-500 animate-pulse">Google E-Tablolardan veriler çekiliyor...</td></tr>';
-
-            try {
-                const res = await fetch(GAS_URL);
-                const data = await res.json();
-                if (Array.isArray(data)) {
-                    transactions = data.map(item => ({
-                        id: item.ID || item.rowId || ('ID_' + Math.random()),
-                        date: typeof item.Tarih === 'string' ? item.Tarih.substring(0, 10) : item.Tarih,
-                        category: item.Kategori,
-                        amount: Number(item.Tutar) || 0,
-                        note: item.Açıklama || ''
-                    }));
-                    saveLocal();
-                    renderTable();
-                    updateAnalysis();
-                }
-            } catch(e) {
-                tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-rose-400">Veri çekilemedi. Apps Script URL izinlerini kontrol edin.</td></tr>';
-            }
-        }
-
-        function formatTRY(num) {
-            return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(num);
-        }
-
         function renderTable() {
             const tbody = document.getElementById('tableBody');
+            document.getElementById('txCountBadge').innerText = \`\${transactions.length} Kayıt\`;
             if (transactions.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-zinc-500">Henüz kayıt eklenmemiş.</td></tr>';
                 return;
@@ -729,18 +755,16 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             });
         }
 
-        let isAllTimeMode = false;
-
         function toggleAllTime() {
             isAllTimeMode = !isAllTimeMode;
             const btn = document.getElementById('allTimeBtn');
             const input = document.getElementById('selectedMonth');
             if (isAllTimeMode) {
-                btn.className = 'text-[10px] uppercase font-bold px-2 py-1 bg-blue-600 text-white rounded-lg border border-blue-500 shadow transition';
+                btn.className = 'text-[10px] uppercase font-bold px-2.5 py-1 bg-blue-600 text-white rounded-lg border border-blue-500 shadow transition';
                 input.disabled = true;
                 input.classList.add('opacity-40');
             } else {
-                btn.className = 'text-[10px] uppercase font-bold px-2 py-1 bg-zinc-900 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition';
+                btn.className = 'text-[10px] uppercase font-bold px-2.5 py-1 bg-zinc-900 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition';
                 input.disabled = false;
                 input.classList.remove('opacity-40');
             }
@@ -774,7 +798,6 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             document.getElementById('metricIncome').innerText = formatTRY(income);
             document.getElementById('metricExpense').innerText = formatTRY(totalExpense);
             
-            const netBox = document.getElementById('netMetricBox');
             const netEl = document.getElementById('metricNet');
             netEl.innerText = formatTRY(net);
             
@@ -803,7 +826,6 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                     : \`Aylık gelir harcamaları karşılamadı. Açığı kapatmak için birikimden \${formatTRY(Math.abs(net))} harcama yapıldı.\`;
             }
 
-            // Dağılım Çubuğu
             const bar = document.getElementById('distributionBar');
             if (totalExpense > 0) {
                 const cardPct = (card / totalExpense * 100).toFixed(1);
@@ -823,6 +845,9 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                 document.getElementById('expenseBreakdownText').innerText = 'Harcama yok';
             }
         }
+
+        // Run lock check on load
+        window.addEventListener('DOMContentLoaded', checkInitialLock);
     </script>
 </body>
 </html>`;

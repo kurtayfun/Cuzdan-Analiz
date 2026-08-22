@@ -38,9 +38,17 @@ export interface MonthlySummary {
 
 export interface GasConfig {
   url: string;
+  pin?: string;
   lastSyncTime: string | null;
   autoSync: boolean;
   isConnected: boolean;
+}
+
+export interface SecurityConfig {
+  pin: string;
+  isPinEnabled: boolean;
+  isUnlocked: boolean;
+  rememberDevice: boolean;
 }
 
 export type ViewMode = 'dashboard' | 'transactions' | 'trends' | 'guide';

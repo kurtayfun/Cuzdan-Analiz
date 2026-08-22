@@ -6,7 +6,25 @@ export const CODE_GS_SCRIPT = `// ==========================================
 // Aylık Nakit Akışı ve Birikim Takip Veritabanı
 // ==========================================
 
+// 🛡️ GÜVENLİK AYARI (PIN KORUMASI)
+// E-tablonuza izinsiz okuma ve yazma yapılmasını engellemek için
+// 4-6 haneli bir PIN belirleyin (Örn: "1923" veya "1234").
+// Boş bırakırsanız ("") PIN koruması devre dışı kalır.
+const SECURITY_PIN = ""; 
+
 function doGet(e) {
+  // PIN Güvenlik Doğrulaması
+  if (SECURITY_PIN && SECURITY_PIN.trim() !== "") {
+    const clientPin = (e && e.parameter && (e.parameter.pin || e.parameter.key)) || "";
+    if (String(clientPin).trim() !== String(SECURITY_PIN).trim()) {
+      return createJsonResponse({ 
+        status: "error", 
+        code: "UNAUTHORIZED", 
+        message: "Erişim reddedildi: Geçersiz veya eksik Güvenlik PIN Kodu." 
+      });
+    }
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getActiveSheet();
   const data = sheet.getDataRange().getValues();
@@ -49,18 +67,6 @@ function doPost(e) {
   lock.tryLock(10000);
   
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getActiveSheet();
-    const ssTz = ss.getSpreadsheetTimeZone() || "GMT+3";
-    
-    // Tablo başlıklarını kontrol et ve gerekirse ekle
-    if (sheet.getLastColumn() === 0 || sheet.getLastRow() === 0) {
-      sheet.appendRow(["ID", "Tarih", "Kategori", "Tutar", "Açıklama", "Kayıt Tarihi"]);
-      sheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#1e293b").setFontColor("#f8fafc");
-      sheet.getRange("B:B").setNumberFormat("yyyy-mm-dd");
-      sheet.getRange("D:D").setNumberFormat("#,##0.00");
-    }
-    
     let payload = {};
     if (e && e.postData && e.postData.contents) {
       try {
@@ -72,6 +78,30 @@ function doPost(e) {
       payload = e.parameter;
     } else {
       return createJsonResponse({ status: "error", message: "Veri içeriği boş" });
+    }
+
+    // PIN Güvenlik Doğrulaması
+    if (SECURITY_PIN && SECURITY_PIN.trim() !== "") {
+      const clientPin = payload.pin || payload.key || (e && e.parameter && (e.parameter.pin || e.parameter.key)) || "";
+      if (String(clientPin).trim() !== String(SECURITY_PIN).trim()) {
+        return createJsonResponse({ 
+          status: "error", 
+          code: "UNAUTHORIZED", 
+          message: "Yetkisiz işlem: Güvenlik PIN Kodu hatalı veya eksik." 
+        });
+      }
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getActiveSheet();
+    const ssTz = ss.getSpreadsheetTimeZone() || "GMT+3";
+    
+    // Tablo başlıklarını kontrol et ve gerekirse ekle
+    if (sheet.getLastColumn() === 0 || sheet.getLastRow() === 0) {
+      sheet.appendRow(["ID", "Tarih", "Kategori", "Tutar", "Açıklama", "Kayıt Tarihi"]);
+      sheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#1e293b").setFontColor("#f8fafc");
+      sheet.getRange("B:B").setNumberFormat("yyyy-mm-dd");
+      sheet.getRange("D:D").setNumberFormat("#,##0.00");
     }
 
     const { action, id, date, category, amount, note } = payload;
@@ -332,12 +362,18 @@ export function getLocalDateString(d: Date = new Date()): string {
 /**
  * Fetch data from Google Apps Script Web App URL.
  */
-export async function fetchFromGas(url: string): Promise<Transaction[]> {
+export async function fetchFromGas(url: string, pin?: string): Promise<Transaction[]> {
   if (!url || !url.startsWith('http')) {
     throw new Error('Geçerli bir Google Apps Script URL\'si belirtilmedi.');
   }
 
-  const response = await fetch(url, {
+  let requestUrl = url;
+  if (pin && pin.trim()) {
+    const sep = requestUrl.includes('?') ? '&' : '?';
+    requestUrl = `${requestUrl}${sep}pin=${encodeURIComponent(pin.trim())}`;
+  }
+
+  const response = await fetch(requestUrl, {
     method: 'GET',
     headers: {
       'Accept': 'application/json',
@@ -349,8 +385,19 @@ export async function fetchFromGas(url: string): Promise<Transaction[]> {
   }
 
   const data = await response.json();
-  if (!Array.isArray(data)) {
+
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    if (data.code === 'UNAUTHORIZED' || (data.status === 'error' && String(data.message).includes('PIN'))) {
+      throw new Error('E-Tablo Güvenlik PIN Kodu hatalı veya eksik. Lütfen doğru PIN kodunu girin.');
+    }
+    if (data.status === 'error') {
+      throw new Error(`Google Sheets Hatası: ${data.message || 'Bilinmeyen hata'}`);
+    }
     throw new Error('E-Tablodan beklenmeyen veri formatı döndü.');
+  }
+
+  if (!Array.isArray(data)) {
+    throw new Error('E-Tablodan liste formatında veri alınamadı.');
   }
 
   // Parse Google Sheets rows into Transaction objects safely
@@ -392,21 +439,28 @@ export async function postToGas(
     category?: string;
     amount?: number;
     note?: string;
-  }
+    pin?: string;
+  },
+  pin?: string
 ): Promise<{ success: boolean; message: string }> {
   if (!url || !url.startsWith('http')) {
     return { success: false, message: 'Google Apps Script URL ayarlanmamış.' };
   }
 
   try {
-    // Try standard fetch first
+    const finalPayload = {
+      ...payload,
+      pin: payload.pin || (pin && pin.trim() ? pin.trim() : undefined),
+    };
+
+    // Try standard fetch
     await fetch(url, {
       method: 'POST',
       mode: 'no-cors', // Standard workaround for Google Apps Script Web App redirects
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(finalPayload),
     });
 
     return { success: true, message: 'İşlem Google Sheets veritabanına iletildi.' };

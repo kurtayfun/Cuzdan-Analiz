@@ -12,6 +12,9 @@ import { MonthlyTrends } from './components/MonthlyTrends';
 import { GasSetupModal } from './components/GasSetupModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { TemplateManagerModal } from './components/TemplateManagerModal';
+import { LockScreen } from './components/LockScreen';
+import { SecuritySettingsModal } from './components/SecuritySettingsModal';
+import { InstallPwaModal } from './components/InstallPwaModal';
 import { 
   Transaction, 
   MonthlySummary, 
@@ -37,12 +40,20 @@ import {
   formatCurrencyTRY 
 } from './services/exportService';
 import { 
+  isPinProtectionEnabled, 
+  isSessionUnlocked, 
+  lockSession, 
+  getStoredPin 
+} from './services/securityService';
+import { 
   FileCode, 
   Download, 
   CheckCircle2, 
   AlertCircle,
   Database,
-  Terminal
+  Terminal,
+  Lock,
+  Smartphone
 } from 'lucide-react';
 
 export default function App() {
@@ -57,6 +68,11 @@ export default function App() {
   const [activeView, setActiveView] = useState<ViewMode>('dashboard');
   const [isGasModalOpen, setIsGasModalOpen] = useState<boolean>(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState<boolean>(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
+  const [isPwaModalOpen, setIsPwaModalOpen] = useState<boolean>(false);
+  const [isLocked, setIsLocked] = useState<boolean>(() => {
+    return isPinProtectionEnabled() && !isSessionUnlocked();
+  });
   const [txToDelete, setTxToDelete] = useState<Transaction | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -77,6 +93,15 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Register PWA service worker if supported
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('Service Worker registration notice:', err);
+      });
+    }
+  }, []);
+
   // Initial local storage load
   useEffect(() => {
     const initialData = loadLocalTransactions();
@@ -91,7 +116,8 @@ export default function App() {
   const handleSyncSilent = async (url: string) => {
     try {
       setIsSyncing(true);
-      const data = await fetchFromGas(url);
+      const pin = getStoredPin();
+      const data = await fetchFromGas(url, pin);
       if (Array.isArray(data) && data.length > 0) {
         setTransactions(data);
         saveLocalTransactions(data);
@@ -118,7 +144,8 @@ export default function App() {
 
     setIsSyncing(true);
     try {
-      const data = await fetchFromGas(gasConfig.url);
+      const pin = getStoredPin();
+      const data = await fetchFromGas(gasConfig.url, pin);
       setTransactions(data);
       saveLocalTransactions(data);
       setGasConfig(prev => ({
@@ -161,6 +188,7 @@ export default function App() {
     setEditingTx(null);
 
     if (gasConfig.url) {
+      const pin = getStoredPin();
       postToGas(gasConfig.url, {
         action: isEdit ? 'update' : 'insert',
         id: newTx.id,
@@ -168,7 +196,7 @@ export default function App() {
         category: newTx.category,
         amount: newTx.amount,
         note: newTx.note,
-      }).catch((err) => console.error('Background GAS Post Error:', err));
+      }, pin).catch((err) => console.error('Background GAS Post Error:', err));
     }
 
     showToast(isEdit ? 'İşlem güncellendi.' : 'Yeni işlem eklendi.');
@@ -179,160 +207,162 @@ export default function App() {
     setTxToDelete(tx);
   };
 
-  // Confirm delete execution
+  // Duplicate transaction helper
+  const handleDuplicateTransaction = (tx: Transaction) => {
+    const duplicated: Transaction = {
+      ...tx,
+      id: `ID_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      note: tx.note ? `${tx.note} (Kopya)` : 'Kopya',
+    };
+    const updated = [duplicated, ...transactions];
+    setTransactions(updated);
+    saveLocalTransactions(updated);
+    if (gasConfig.url) {
+      const pin = getStoredPin();
+      postToGas(gasConfig.url, {
+        action: 'insert',
+        id: duplicated.id,
+        date: duplicated.date,
+        category: duplicated.category,
+        amount: duplicated.amount,
+        note: duplicated.note,
+      }, pin).catch((err) => console.error('Background GAS Duplicate Error:', err));
+    }
+    showToast('İşlem başarıyla kopyalandı.');
+  };
+
+  // Confirm delete handler
   const handleConfirmDelete = async () => {
     if (!txToDelete) return;
     setIsDeleting(true);
-
     const targetTx = txToDelete;
-    const updated = transactions.filter((t) => t.id !== targetTx.id);
-    setTransactions(updated);
-    saveLocalTransactions(updated);
+    try {
+      const updatedList = transactions.filter((t) => t.id !== targetTx.id);
+      setTransactions(updatedList);
+      saveLocalTransactions(updatedList);
 
-    if (editingTx?.id === targetTx.id) {
-      setEditingTx(null);
+      if (gasConfig.url) {
+        const pin = getStoredPin();
+        await postToGas(gasConfig.url, {
+          action: 'delete',
+          id: targetTx.id,
+          date: targetTx.date,
+          category: targetTx.category,
+          amount: targetTx.amount,
+          note: targetTx.note,
+        }, pin);
+      }
+
+      showToast('Kayıt silindi.');
+    } catch (err: any) {
+      console.error('Delete error:', err);
+      showToast(`Silme işlemi uyarısı: ${err.message}`, 'error');
+    } finally {
+      setIsDeleting(false);
+      setTxToDelete(null);
     }
-
-    if (gasConfig.url) {
-      postToGas(gasConfig.url, {
-        action: 'delete',
-        id: targetTx.id,
-        date: targetTx.date,
-        category: targetTx.category,
-        amount: targetTx.amount,
-        note: targetTx.note,
-      }).catch((err) => console.error('Background GAS Delete Error:', err));
-    }
-
-    setIsDeleting(false);
-    setTxToDelete(null);
-    showToast(`"${targetTx.note || targetTx.category}" kaydı silindi.`);
   };
 
-  // Duplicate transaction with today's date
-  const handleDuplicateTransaction = (tx: Transaction) => {
-    const today = new Date().toISOString().substring(0, 10);
-    const duplicatedTx: Transaction = {
-      ...tx,
-      id: `ID_${Date.now()}`,
-      date: today,
-      note: tx.note ? `${tx.note} (Kopya)` : 'Kopya İşlem',
-      createdAt: new Date().toISOString(),
-    };
-
-    const updated = [duplicatedTx, ...transactions];
-    setTransactions(updated);
-    saveLocalTransactions(updated);
-
-    if (gasConfig.url) {
-      postToGas(gasConfig.url, {
-        action: 'insert',
-        id: duplicatedTx.id,
-        date: duplicatedTx.date,
-        category: duplicatedTx.category,
-        amount: duplicatedTx.amount,
-        note: duplicatedTx.note,
-      }).catch((err) => console.error('Background GAS Post Error:', err));
-    }
-
-    showToast('İşlem bugünün tarihiyle çoğaltıldı.');
-  };
-
-  // Save GAS URL from modal
-  const handleSaveGasUrl = async (url: string) => {
+  // Save GAS Web App URL from modal
+  const handleSaveGasUrl = async (url: string): Promise<boolean> => {
     setStoredGasUrl(url);
-    const hasUrl = Boolean(url && url.startsWith('http'));
-    setGasConfig(prev => ({
+    const isConn = Boolean(url && url.startsWith('http'));
+    setGasConfig((prev) => ({
       ...prev,
       url,
-      isConnected: hasUrl,
+      isConnected: isConn,
     }));
 
-    if (hasUrl) {
-      showToast('Google Apps Script URL kaydedildi. Veriler çekiliyor...');
-      await handleSync();
+    if (isConn) {
+      showToast('Web App URL kaydedildi, veriler eşitleniyor...');
+      await handleSyncSilent(url);
     } else {
-      showToast('Yerel mod aktif.');
+      showToast('URL kaldırıldı. Uygulama yerel modda çalışıyor.', 'info');
     }
     return true;
   };
 
-  // Test GAS URL
+  // Test GAS connection with live probe
   const handleTestConnection = async (url: string) => {
-    try {
-      const data = await fetchFromGas(url);
-      return {
-        success: true,
-        message: 'Bağlantı Başarılı! E-Tabloya erişildi.',
-        count: Array.isArray(data) ? data.length : 0,
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: `Bağlantı hatası: ${err.message}. Lütfen "Erişimi Olanlar: Herkes (Anyone)" ayarlandığından emin olun.`,
-      };
-    }
+    const pin = getStoredPin();
+    const data = await fetchFromGas(url, pin);
+    return {
+      success: true,
+      message: 'Google E-Tablo ve Apps Script bağlantısı başarılı!',
+      count: data.length,
+    };
   };
 
+  // Save customized templates
   const handleSaveTemplates = (newTemplates: QuickTemplate[]) => {
     setTemplates(newTemplates);
     saveLocalTemplates(newTemplates);
     showToast('Hızlı şablonlar güncellendi.');
   };
 
-  // Export handlers
+  // Lock App manually
+  const handleLockNow = () => {
+    lockSession();
+    setIsLocked(true);
+    setIsSecurityModalOpen(false);
+    showToast('Uygulama kilitlendi.', 'info');
+  };
+
+  // Single HTML Export
   const handleExportHtml = () => {
-    const html = generateSingleFileHtml(gasConfig.url, templates);
-    downloadFile('index.html', html, 'text/html');
-    showToast('Tek dosya index.html indirildi!');
+    const pin = getStoredPin();
+    const htmlContent = generateSingleFileHtml(gasConfig.url, templates, pin);
+    downloadFile('index.html', htmlContent, 'text/html');
+    showToast('Tek dosyalık index.html indirildi (PWA ve PIN korumalı).');
   };
 
+  // CSV Export
   const handleExportCsv = () => {
-    const csv = exportTransactionsToCsv(transactions);
-    downloadFile(`nakit_akisi_${selectedMonth}.csv`, csv, 'text/csv;charset=utf-8;');
-    showToast('CSV dosyası indirildi!');
+    const csvContent = exportTransactionsToCsv(transactions);
+    downloadFile(`cuzdan_kayitlari_${new Date().toISOString().substring(0, 10)}.csv`, csvContent, 'text/csv;charset=utf-8;');
+    showToast('CSV dökümü indirildi.');
   };
 
-  // Calculate Monthly or All-Time Summary
-  const monthlySummary = useMemo<MonthlySummary>(() => {
+  // Calculate monthly summary
+  const monthlySummary: MonthlySummary = useMemo(() => {
     const isAllTime = selectedMonth === 'all';
+    const filtered = transactions.filter((t) => {
+      if (isAllTime) return true;
+      return t.date && t.date.substring(0, 7) === selectedMonth;
+    });
+
     let income = 0;
     let card = 0;
     let transfer = 0;
     let cash = 0;
     let other = 0;
-    let hasEntries = false;
 
-    transactions.forEach((t) => {
-      if (isAllTime || (t.date && t.date.startsWith(selectedMonth))) {
-        hasEntries = true;
-        const amt = t.amount || 0;
-        if (t.category === 'Sabit Gelir' || t.category === 'Ek Gelir') {
-          income += amt;
-        } else if (t.category === 'Kart Ekstresi') {
-          card += amt;
-        } else if (t.category === 'Transfer Gideri') {
-          transfer += amt;
-        } else if (t.category === 'Nakit Çekim') {
-          cash += amt;
-        } else {
-          other += amt;
-        }
+    for (const tx of filtered) {
+      const amt = Number(tx.amount) || 0;
+      if (tx.category === 'Sabit Gelir' || tx.category === 'Ek Gelir') {
+        income += amt;
+      } else if (tx.category === 'Kart Ekstresi') {
+        card += amt;
+      } else if (tx.category === 'Transfer Gideri') {
+        transfer += amt;
+      } else if (tx.category === 'Nakit Çekim') {
+        cash += amt;
+      } else {
+        other += amt;
       }
-    });
+    }
 
     const totalExpense = card + transfer + cash + other;
     const netBalance = income - totalExpense;
-    const savingsRate = income > 0 ? (netBalance / income) * 100 : 0;
+    const savingsRate = income > 0 ? ((income - totalExpense) / income) * 100 : 0;
 
-    let status: 'surplus' | 'deficit' | 'balanced' | 'empty' = 'empty';
-    if (!hasEntries) {
+    let status: MonthlySummary['status'] = 'surplus';
+    if (income === 0 && totalExpense === 0) {
       status = 'empty';
-    } else if (netBalance > 0) {
-      status = 'surplus';
     } else if (netBalance < 0) {
       status = 'deficit';
-    } else {
+    } else if (netBalance === 0) {
       status = 'balanced';
     }
 
@@ -350,6 +380,18 @@ export default function App() {
     };
   }, [transactions, selectedMonth]);
 
+  // If locked, render LockScreen immediately
+  if (isLocked) {
+    return (
+      <LockScreen
+        onUnlock={() => {
+          setIsLocked(false);
+          showToast('Kilit açıldı. Hoş geldiniz!');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Top Navbar */}
@@ -362,6 +404,9 @@ export default function App() {
         onSync={handleSync}
         isSyncing={isSyncing}
         onOpenGasModal={() => setIsGasModalOpen(true)}
+        onOpenSecurityModal={() => setIsSecurityModalOpen(true)}
+        onOpenPwaModal={() => setIsPwaModalOpen(true)}
+        isPinEnabled={isPinProtectionEnabled()}
         onExportHtml={handleExportHtml}
         onExportCsv={handleExportCsv}
       />
@@ -469,6 +514,22 @@ export default function App() {
           </button>
           <span>•</span>
           <button
+            onClick={() => setIsSecurityModalOpen(true)}
+            className="hover:text-blue-400 transition flex items-center gap-1"
+          >
+            <Lock className="w-3.5 h-3.5 text-blue-500" />
+            <span>Güvenlik & PIN</span>
+          </button>
+          <span>•</span>
+          <button
+            onClick={() => setIsPwaModalOpen(true)}
+            className="hover:text-blue-400 transition flex items-center gap-1"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-blue-500" />
+            <span>Telefona Yükle (PWA)</span>
+          </button>
+          <span>•</span>
+          <button
             onClick={handleExportHtml}
             className="hover:text-blue-400 transition flex items-center gap-1"
           >
@@ -485,7 +546,7 @@ export default function App() {
           </button>
         </div>
         <p className="text-[11px] text-zinc-600 font-mono uppercase tracking-tight">
-          Cüzdan Analiz v2.1 • Google Apps Script & Sheets API Entegre Nakit Akışı ve Birikim Takip Sistemi
+          Cüzdan Analiz v2.2 • Güvenli PIN Korumalı & PWA Destekli Google Apps Script Nakit Akışı Sistemi
         </p>
       </footer>
 
@@ -496,6 +557,20 @@ export default function App() {
         gasUrl={gasConfig.url}
         onSaveGasUrl={handleSaveGasUrl}
         onTestConnection={handleTestConnection}
+      />
+
+      {/* Security & PIN Settings Modal */}
+      <SecuritySettingsModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+        onLockNow={handleLockNow}
+        onShowToast={showToast}
+      />
+
+      {/* PWA Install Modal */}
+      <InstallPwaModal
+        isOpen={isPwaModalOpen}
+        onClose={() => setIsPwaModalOpen(false)}
       />
 
       {/* Delete Confirmation Modal */}

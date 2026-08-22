@@ -8,7 +8,11 @@ import {
   TrendingUp,
   Calendar,
   Database,
-  Globe
+  Globe,
+  ShieldCheck,
+  ShieldAlert,
+  Smartphone,
+  Lock
 } from 'lucide-react';
 import { GasConfig, ViewMode } from '../types';
 
@@ -21,6 +25,9 @@ interface NavbarProps {
   onSync: () => void;
   isSyncing: boolean;
   onOpenGasModal: () => void;
+  onOpenSecurityModal: () => void;
+  onOpenPwaModal: () => void;
+  isPinEnabled: boolean;
   onExportHtml: () => void;
   onExportCsv: () => void;
 }
@@ -34,6 +41,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSync,
   isSyncing,
   onOpenGasModal,
+  onOpenSecurityModal,
+  onOpenPwaModal,
+  isPinEnabled,
   onExportHtml,
   onExportCsv,
 }) => {
@@ -95,7 +105,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Mobile Quick Action */}
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-1.5 md:hidden">
+            <button
+              onClick={onOpenPwaModal}
+              className="bg-zinc-900 hover:bg-zinc-800 text-blue-400 p-2 rounded-lg border border-zinc-800 transition-all"
+              title="Telefona Yükle (PWA)"
+            >
+              <Smartphone className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onOpenSecurityModal}
+              className={`p-2 rounded-lg border transition-all ${
+                isPinEnabled 
+                  ? 'bg-blue-950/40 text-blue-400 border-blue-800/60' 
+                  : 'bg-zinc-900 text-zinc-400 border-zinc-800'
+              }`}
+              title="Güvenlik ve PIN Ayarları"
+            >
+              {isPinEnabled ? <ShieldCheck className="w-4 h-4 text-emerald-400" /> : <Lock className="w-4 h-4" />}
+            </button>
             <button
               onClick={onSync}
               disabled={isSyncing}
@@ -175,17 +203,39 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Right: Technical Minimalist Actions & Connection Status */}
-        <div className="hidden md:flex items-center gap-4">
-          {/* Technical Status Indicator */}
-          <div className="text-right">
-            <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-tight">Bağlantı Durumu</p>
-            <p className="text-xs font-mono flex items-center gap-1.5 justify-end">
-              <span className={`w-2 h-2 rounded-full ${gasConfig.isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
-              <span className={gasConfig.isConnected ? 'text-emerald-400' : 'text-amber-400'}>
-                {gasConfig.isConnected ? 'Google Cloud API Active' : 'Local Storage Mode'}
-              </span>
-            </p>
-          </div>
+        <div className="hidden md:flex items-center gap-3">
+          {/* Security Button */}
+          <button
+            onClick={onOpenSecurityModal}
+            className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider ${
+              isPinEnabled
+                ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/60 hover:bg-emerald-900/50'
+                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-zinc-800'
+            }`}
+            title="Güvenlik ve PIN Ayarları"
+          >
+            {isPinEnabled ? (
+              <>
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span className="text-[11px] text-emerald-400">PIN Aktif</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-4 h-4 text-zinc-400" />
+                <span className="text-[11px] text-zinc-400">Güvenlik</span>
+              </>
+            )}
+          </button>
+
+          {/* PWA Mobile Install Button */}
+          <button
+            onClick={onOpenPwaModal}
+            className="bg-zinc-900 hover:bg-zinc-800 text-zinc-200 p-2.5 rounded-xl border border-zinc-800 transition-all flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
+            title="Telefonunuza Uygulama Olarak Yükleyin"
+          >
+            <Smartphone className="w-4 h-4 text-blue-400" />
+            <span className="text-[11px]">Telefona Yükle</span>
+          </button>
 
           {/* View Mode Toggle */}
           <div className="flex items-center bg-zinc-900 border border-zinc-800 p-1 rounded-xl text-xs font-bold uppercase tracking-wider">
@@ -230,20 +280,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Google Apps Script ve Ayarlar"
           >
             <Settings className="w-4 h-4 text-blue-500" />
-            <span className="hidden lg:inline">Code.gs & Ayarlar</span>
+            <span className="hidden xl:inline">Code.gs</span>
           </button>
 
           {/* Download index.html Button */}
           <button
             onClick={onExportHtml}
-            className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-blue-900/20 flex items-center gap-1.5"
+            className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-blue-900/20 flex items-center gap-1.5"
             title="GitHub Pages için tek dosya index.html indir"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>index.html İndir</span>
+            <span>index.html</span>
           </button>
         </div>
       </div>
     </header>
   );
 };
+
