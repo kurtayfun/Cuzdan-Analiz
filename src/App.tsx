@@ -31,7 +31,10 @@ import {
   setStoredGasUrl, 
   fetchFromGas, 
   postToGas,
-  getLocalDateString 
+  getLocalDateString,
+  normalizeDateToYMD,
+  extractMonthKey,
+  isSameMonth
 } from './services/gasService';
 import { 
   generateSingleFileHtml, 
@@ -107,6 +110,20 @@ export default function App() {
     const initialData = loadLocalTransactions();
     setTransactions(initialData);
 
+    // Auto-select latest month with records if current month has no data
+    if (initialData.length > 0) {
+      const currentMonthKey = getLocalDateString().substring(0, 7);
+      const hasRecordsInCurrent = initialData.some((t) => isSameMonth(t.date, currentMonthKey));
+      if (!hasRecordsInCurrent) {
+        const availableMonths = Array.from(
+          new Set(initialData.map((t) => extractMonthKey(t.date)).filter(Boolean))
+        ).sort().reverse();
+        if (availableMonths.length > 0) {
+          setSelectedMonth(availableMonths[0]);
+        }
+      }
+    }
+
     const url = getStoredGasUrl();
     if (url && url.startsWith('http')) {
       handleSyncSilent(url);
@@ -126,6 +143,17 @@ export default function App() {
           isConnected: true,
           lastSyncTime: new Date().toLocaleTimeString('tr-TR'),
         }));
+
+        // If current selected month has no records, jump to the month with records
+        const hasRecordsInSelected = data.some((t) => isSameMonth(t.date, selectedMonth));
+        if (!hasRecordsInSelected) {
+          const availableMonths = Array.from(
+            new Set(data.map((t) => extractMonthKey(t.date)).filter(Boolean))
+          ).sort().reverse();
+          if (availableMonths.length > 0) {
+            setSelectedMonth(availableMonths[0]);
+          }
+        }
       }
     } catch (err) {
       console.warn('Initial sync warning:', err);
@@ -166,10 +194,11 @@ export default function App() {
   const handleSaveTransaction = async (txData: Omit<Transaction, 'id'> & { id?: string }) => {
     const isEdit = Boolean(txData.id);
     const txId = txData.id || `ID_${Date.now()}`;
+    const normalizedDate = normalizeDateToYMD(txData.date);
 
     const newTx: Transaction = {
       id: txId,
-      date: txData.date,
+      date: normalizedDate,
       category: txData.category,
       amount: txData.amount,
       note: txData.note,
@@ -186,6 +215,12 @@ export default function App() {
     setTransactions(updatedList);
     saveLocalTransactions(updatedList);
     setEditingTx(null);
+
+    // If in monthly view mode, automatically switch to the newly created/edited transaction's month
+    const newMonthKey = extractMonthKey(newTx.date);
+    if (selectedMonth !== 'all' && newMonthKey) {
+      setSelectedMonth(newMonthKey);
+    }
 
     if (gasConfig.url) {
       const pin = getStoredPin();
@@ -329,7 +364,7 @@ export default function App() {
     const isAllTime = selectedMonth === 'all';
     const filtered = transactions.filter((t) => {
       if (isAllTime) return true;
-      return t.date && t.date.substring(0, 7) === selectedMonth;
+      return isSameMonth(t.date, selectedMonth);
     });
 
     let income = 0;
@@ -401,6 +436,7 @@ export default function App() {
         setActiveView={setActiveView}
         selectedMonth={selectedMonth}
         setSelectedMonth={setSelectedMonth}
+        transactions={transactions}
         onSync={handleSync}
         isSyncing={isSyncing}
         onOpenGasModal={() => setIsGasModalOpen(true)}
@@ -478,6 +514,7 @@ export default function App() {
               <TransactionList
                 transactions={transactions}
                 selectedMonth={selectedMonth}
+                onSelectMonth={(m) => setSelectedMonth(m)}
                 onEdit={(tx) => {
                   setEditingTx(tx);
                   window.scrollTo({ top: 0, behavior: 'smooth' });

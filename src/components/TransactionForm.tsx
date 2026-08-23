@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Transaction, TransactionCategory, QuickTemplate } from '../types';
 import { formatCurrencyTRY } from '../services/exportService';
-import { getLocalDateString } from '../services/gasService';
+import { getLocalDateString, normalizeDateToYMD } from '../services/gasService';
 
 interface TransactionFormProps {
   onSave: (tx: Omit<Transaction, 'id'> & { id?: string }) => Promise<void>;
@@ -55,16 +55,24 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
   // Sync state when editingTx changes
   useEffect(() => {
     if (editingTx) {
-      setDate(editingTx.date);
+      setDate(normalizeDateToYMD(editingTx.date));
       setCategory(editingTx.category);
       setAmount(editingTx.amount.toString());
       setNote(editingTx.note || '');
     } else {
       const today = getLocalDateString();
-      if (selectedMonth === 'all' || today.startsWith(selectedMonth)) {
+      if (selectedMonth === 'all') {
         setDate(today);
+      } else if (today.startsWith(selectedMonth)) {
+        setDate(today);
+      } else if (selectedMonth.includes('-')) {
+        const [y, m] = selectedMonth.split('-').map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        const curDay = parseInt(today.slice(8, 10), 10) || 1;
+        const safeDay = Math.min(Math.max(1, curDay), lastDay);
+        setDate(`${selectedMonth}-${String(safeDay).padStart(2, '0')}`);
       } else {
-        setDate(`${selectedMonth}-01`);
+        setDate(today);
       }
     }
   }, [editingTx, selectedMonth]);

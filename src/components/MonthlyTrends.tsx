@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { formatCurrencyTRY } from '../services/exportService';
+import { extractMonthKey } from '../services/gasService';
 
 interface MonthlyTrendsProps {
   transactions: Transaction[];
@@ -20,8 +21,8 @@ export const MonthlyTrends: React.FC<MonthlyTrendsProps> = ({ transactions, onSe
     const map = new Map<string, { income: number; expense: number; count: number }>();
 
     transactions.forEach((tx) => {
-      if (!tx.date) return;
-      const month = tx.date.substring(0, 7);
+      const month = extractMonthKey(tx.date);
+      if (!month) return;
       const current = map.get(month) || { income: 0, expense: 0, count: 0 };
       const isIncome = tx.category === 'Sabit Gelir' || tx.category === 'Ek Gelir';
 

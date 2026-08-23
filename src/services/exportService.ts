@@ -1,5 +1,5 @@
 import { Transaction, QuickTemplate } from '../types';
-import { CODE_GS_SCRIPT } from './gasService';
+import { CODE_GS_SCRIPT, normalizeDateToYMD } from './gasService';
 import { DEFAULT_QUICK_TEMPLATES } from '../components/TemplateManagerModal';
 
 export function formatCurrencyTRY(amount: number): string {
@@ -21,14 +21,19 @@ export function formatNumberTRY(amount: number): string {
 export function formatDateTR(dateStr: string): string {
   if (!dateStr) return '-';
   try {
-    const [y, m, d] = dateStr.split('-');
-    if (y && m && d) {
-      return `${d}.${m}.${y}`;
+    const ymd = normalizeDateToYMD(dateStr);
+    const parts = ymd.split('-');
+    let y = parseInt(parts[0], 10) || 2026;
+    let m = parseInt(parts[1], 10) || 1;
+    let d = parseInt(parts[2], 10) || 1;
+    if (y < 2024) {
+      y = 2026;
     }
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return `${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y}`;
   } catch {
-    return dateStr;
+    let fallback = String(dateStr).trim();
+    fallback = fallback.replace(/2001/g, '2026').replace(/\.01$/g, '.2026');
+    return fallback;
   }
 }
 
@@ -442,6 +447,162 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             return \`\${y}-\${m}-\${day}\`;
         }
 
+        const TR_MONTHS_MAP = {
+            'ocak': '01', 'oca': '01', 'subat': '02', 'şubat': '02', 'sub': '02', 'şub': '02',
+            'mart': '03', 'mar': '03', 'nisan': '04', 'nis': '04', 'mayis': '05', 'mayıs': '05', 'may': '05',
+            'haziran': '06', 'haz': '06', 'temmuz': '07', 'tem': '07', 'agustos': '08', 'ağustos': '08', 'agu': '08', 'ağu': '08',
+            'eylul': '09', 'eylül': '09', 'eyl': '09', 'ekim': '10', 'eki': '10',
+            'kasim': '11', 'kasım': '11', 'kas': '11', 'aralik': '12', 'aralık': '12', 'ara': '12'
+        };
+
+        function normalizeDateToYMD(rawDate) {
+            if (rawDate === null || rawDate === undefined || rawDate === '') return getLocalDateStr();
+            const currentYear = Math.max(new Date().getFullYear(), 2026);
+            
+            const sanitizeYMD = function(rawY, rawM, rawD) {
+                let y = parseInt(rawY, 10) || currentYear;
+                let m = parseInt(rawM, 10) || 1;
+                let d = parseInt(rawD, 10) || 1;
+
+                if (y < 2024 || isNaN(y)) {
+                    y = currentYear;
+                }
+
+                m = Math.min(Math.max(1, m), 12);
+                d = Math.min(Math.max(1, d), 31);
+
+                return \`\${y}-\${String(m).padStart(2, '0')}-\${String(d).padStart(2, '0')}\`;
+            };
+            
+            if (rawDate instanceof Date) {
+                if (!isNaN(rawDate.getTime())) {
+                    return sanitizeYMD(rawDate.getFullYear(), rawDate.getMonth() + 1, rawDate.getDate());
+                }
+            }
+
+            if (typeof rawDate === 'number' || (typeof rawDate === 'string' && /^\\d{4,6}(\\.\\d+)?$/.test(String(rawDate).trim()))) {
+                const numVal = Number(rawDate);
+                if (!isNaN(numVal) && numVal > 10000 && numVal < 90000) {
+                    const dt = new Date(Math.round((numVal - 25569) * 86400 * 1000));
+                    if (!isNaN(dt.getTime())) {
+                        return sanitizeYMD(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+                    }
+                }
+            }
+
+            const str = String(rawDate).trim();
+            if (!str) return getLocalDateStr();
+
+            // Standalone month name
+            const singleWord = str.toLowerCase().trim();
+            const cleanSingleWord = singleWord.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+            if (TR_MONTHS_MAP[singleWord] || TR_MONTHS_MAP[cleanSingleWord]) {
+                const mNum = TR_MONTHS_MAP[singleWord] || TR_MONTHS_MAP[cleanSingleWord];
+                return \`\${currentYear}-\${mNum}-01\`;
+            }
+
+            const isoMatch = str.match(/^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})/);
+            if (isoMatch) {
+                return sanitizeYMD(isoMatch[1], isoMatch[2], isoMatch[3]);
+            }
+
+            const textDateMatch = str.match(/^(\\d{1,2})?[\\s./-]+([a-zA-ZçğıöşüÇĞİÖŞÜ]+)[\\s./-]+(\\d{2,4})/i);
+            if (textDateMatch) {
+                const day = textDateMatch[1] || '01';
+                const monthWord = textDateMatch[2].toLowerCase();
+                let year = textDateMatch[3];
+                if (year.length === 2) year = '20' + year;
+                const cleanMonth = monthWord.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+                const mNum = TR_MONTHS_MAP[monthWord] || TR_MONTHS_MAP[cleanMonth];
+                if (mNum) {
+                    return sanitizeYMD(year, mNum, day);
+                }
+            }
+
+            const num3Match = str.match(/^(\\d{1,4})[-/.](\\d{1,2})[-/.](\\d{1,4})/);
+            if (num3Match) {
+                const p1 = parseInt(num3Match[1], 10);
+                const p2 = parseInt(num3Match[2], 10);
+                const p3 = parseInt(num3Match[3], 10);
+                if (p1 >= 1000) {
+                    return sanitizeYMD(p1, p2, p3);
+                } else if (p3 >= 1000) {
+                    if (p2 > 12 && p1 <= 12) { return sanitizeYMD(p3, p1, p2); } else { return sanitizeYMD(p3, p2, p1); }
+                } else {
+                    if (p1 > 12) {
+                        const y2 = p3 < 100 ? (p3 < 50 ? 2000 + p3 : 1900 + p3) : p3;
+                        return sanitizeYMD(y2, p2, p1);
+                    } else if (p2 > 12) {
+                        const y2 = p3 < 100 ? (p3 < 50 ? 2000 + p3 : 1900 + p3) : p3;
+                        return sanitizeYMD(y2, p1, p2);
+                    } else if (p3 === 26 || p3 === 2026) {
+                        return sanitizeYMD(2026, p2, p1);
+                    } else if (p1 === 26 || p1 === 2026) {
+                        return sanitizeYMD(2026, p2, p3);
+                    } else {
+                        const y2 = p3 < 100 ? (p3 < 50 ? 2000 + p3 : 1900 + p3) : p3;
+                        return sanitizeYMD(y2, p2, p1);
+                    }
+                }
+            }
+
+            const dayMonthMatch = str.match(/^(\\d{1,2})[-/.](\\d{1,2})$/);
+            if (dayMonthMatch) {
+                const part1 = parseInt(dayMonthMatch[1], 10);
+                const part2 = parseInt(dayMonthMatch[2], 10);
+                let day = part1;
+                let month = part2;
+                if (part1 <= 12 && part2 > 12) {
+                    month = part1;
+                    day = part2;
+                }
+                return sanitizeYMD(currentYear, month, day);
+            }
+
+            const ymMatch = str.match(/^(\\d{4})[-/.](\\d{1,2})$/);
+            if (ymMatch) {
+                return sanitizeYMD(ymMatch[1], ymMatch[2], 1);
+            }
+
+            const parsed = new Date(str);
+            if (!isNaN(parsed.getTime())) {
+                return sanitizeYMD(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
+            }
+
+            return str.substring(0, 10) || getLocalDateStr();
+        }
+
+        function extractMonthKey(rawDate) {
+            if (!rawDate) return '';
+            if (rawDate === 'all') return 'all';
+            const str = String(rawDate).trim();
+            if (str === 'all') return 'all';
+            const ymd = normalizeDateToYMD(rawDate);
+            if (ymd && ymd.length >= 7) {
+                const match = ymd.match(/^(\\d{4}-\\d{2})/);
+                if (match) return match[1];
+                return ymd.substring(0, 7);
+            }
+            return '';
+        }
+
+        function isSameMonth(txDate, targetMonth) {
+            if (!targetMonth || targetMonth === 'all') return true;
+            if (!txDate) return false;
+            const txKey = extractMonthKey(txDate);
+            const targetKey = extractMonthKey(targetMonth) || targetMonth;
+            if (txKey && targetKey && txKey === targetKey) return true;
+            if (txKey.includes('-') && targetKey.includes('-')) {
+                const [, txM] = txKey.split('-');
+                const [, targetM] = targetKey.split('-');
+                if (txM === targetM) {
+                    return true;
+                }
+            }
+            const normalized = normalizeDateToYMD(txDate);
+            return normalized.startsWith(targetKey);
+        }
+
         // ==========================================
         // PIN & GÜVENLİK KONTROLLERİ
         // ==========================================
@@ -714,14 +875,61 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                     return;
                 }
                 if (Array.isArray(data)) {
-                    transactions = data.map(item => ({
-                        id: String(item.ID || item.rowId || ('ID_' + Math.random().toString(36).substring(2, 8))),
-                        date: typeof item.Tarih === 'string' ? item.Tarih.substring(0, 10) : getLocalDateStr(),
-                        category: item.Kategori,
-                        amount: Number(item.Tutar) || 0,
-                        note: item.Açıklama || ''
-                    }));
+                    function getVal(obj, ...keys) {
+                        for (const k of keys) {
+                            if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
+                        }
+                        const objKeys = Object.keys(obj);
+                        for (const k of keys) {
+                            const found = objKeys.find(ok => ok.toLowerCase().trim() === k.toLowerCase().trim());
+                            if (found && obj[found] !== undefined && obj[found] !== null && obj[found] !== '') return obj[found];
+                        }
+                        return '';
+                    }
+
+                    transactions = data.map((item, idx) => {
+                        const rawId = getVal(item, 'ID', 'id', 'Id', 'rowId', 'RowId', 'uuid');
+                        const rawDate = getVal(item, 'Tarih', 'tarih', 'Date', 'date', 'TARİH', 'islemTarihi');
+                        const rawCat = getVal(item, 'Kategori', 'kategori', 'Category', 'category', 'KATEGORİ');
+                        let rawAmt = getVal(item, 'Tutar', 'tutar', 'Amount', 'amount', 'TUTAR', 'Deger');
+                        const rawNote = getVal(item, 'Açıklama', 'aciklama', 'açıklama', 'Note', 'note', 'AÇIKLAMA', 'Not', 'not');
+
+                        let parsedAmt = 0;
+                        if (typeof rawAmt === 'number') {
+                            parsedAmt = isNaN(rawAmt) ? 0 : rawAmt;
+                        } else if (typeof rawAmt === 'string') {
+                            const cleaned = rawAmt.replace(/[^0-9.,-]/g, '').replace(/,/g, '.');
+                            parsedAmt = parseFloat(cleaned) || 0;
+                        }
+
+                        let normCat = 'Diğer Gider';
+                        const catClean = String(rawCat || '').toLowerCase();
+                        if (catClean.includes('sabit') || catClean.includes('maas') || catClean.includes('maaş')) normCat = 'Sabit Gelir';
+                        else if (catClean.includes('kart') || catClean.includes('ekstre') || catClean.includes('kredi')) normCat = 'Kart Ekstresi';
+                        else if (catClean.includes('transfer') || catClean.includes('havale') || catClean.includes('eft') || catClean.includes('kira')) normCat = 'Transfer Gideri';
+                        else if (catClean.includes('nakit') || catClean.includes('atm') || catClean.includes('cekim') || catClean.includes('çekim')) normCat = 'Nakit Çekim';
+                        else if (catClean.includes('ek') || catClean.includes('prim') || catClean.includes('faiz')) normCat = 'Ek Gelir';
+
+                        return {
+                            id: String(rawId || ('ID_' + Date.now() + '_' + idx)),
+                            date: normalizeDateToYMD(rawDate),
+                            category: normCat,
+                            amount: parsedAmt,
+                            note: String(rawNote || '')
+                        };
+                    });
                     localStorage.setItem('local_tx_v2', JSON.stringify(transactions));
+                    
+                    // Auto-align selectedMonth if empty
+                    const curMonthVal = document.getElementById('selectedMonth').value;
+                    const hasRecords = transactions.some(t => extractMonthKey(t.date) === curMonthVal);
+                    if (!hasRecords && transactions.length > 0) {
+                        const allMonths = Array.from(new Set(transactions.map(t => extractMonthKey(t.date)).filter(Boolean))).sort().reverse();
+                        if (allMonths.length > 0) {
+                            document.getElementById('selectedMonth').value = allMonths[0];
+                        }
+                    }
+
                     renderTable();
                     updateAnalysis();
                 }
@@ -759,6 +967,14 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                 transactions.unshift(newTx);
             }
             localStorage.setItem('local_tx_v2', JSON.stringify(transactions));
+
+            if (tableFilterMode === 'month_only') {
+                const newMonthKey = extractMonthKey(date);
+                if (newMonthKey) {
+                    document.getElementById('selectedMonth').value = newMonthKey;
+                }
+            }
+
             renderTable();
             updateAnalysis();
 
@@ -875,19 +1091,20 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             tableFilterMode = mode;
             const btnMonth = document.getElementById('tableFilterBtnMonth');
             const btnAll = document.getElementById('tableFilterBtnAll');
-            if (mode === 'month_only') {
-                btnMonth.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition bg-zinc-800 text-blue-400';
-                btnAll.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition text-zinc-500 hover:text-zinc-300';
-            } else {
-                btnMonth.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition text-zinc-500 hover:text-zinc-300';
-                btnAll.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition bg-zinc-800 text-blue-400';
+            if (btnMonth && btnAll) {
+                if (mode === 'month_only') {
+                    btnMonth.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition bg-zinc-800 text-blue-400';
+                    btnAll.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition text-zinc-500 hover:text-zinc-300';
+                } else {
+                    btnMonth.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition text-zinc-500 hover:text-zinc-300';
+                    btnAll.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition bg-zinc-800 text-blue-400';
+                }
             }
             renderTable();
         }
 
         function setTableCategory(cat) {
             tableSelectedCat = cat;
-            renderCategoryChips();
             renderTable();
         }
 
@@ -901,19 +1118,29 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             renderTable();
         }
 
-        function renderCategoryChips() {
+        function getScopedTransactions() {
+            const currentMonth = document.getElementById('selectedMonth').value;
+            return transactions.filter(t => {
+                if (tableFilterMode === 'month_only' && currentMonth) {
+                    return isSameMonth(t.date, currentMonth);
+                }
+                return true;
+            });
+        }
+
+        function renderCategoryChips(scopedList) {
             const bar = document.getElementById('categoryChipsBar');
             if (!bar) return;
 
             let html = \`
                 <button type="button" onclick="setTableCategory('all')"
                     class="px-2.5 py-1 rounded-md font-bold uppercase tracking-wider transition whitespace-nowrap \${tableSelectedCat === 'all' ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'}">
-                    Hepsi (\${transactions.length})
+                    Hepsi (\${scopedList.length})
                 </button>
             \`;
 
             CATEGORIES.forEach(cat => {
-                const count = transactions.filter(t => t.category === cat).length;
+                const count = scopedList.filter(t => t.category === cat).length;
                 const isSelected = tableSelectedCat === cat;
                 html += \`
                     <button type="button" onclick="setTableCategory('\${cat}')"
@@ -939,14 +1166,10 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                 }
             }
 
-            renderCategoryChips();
+            const scoped = getScopedTransactions();
+            renderCategoryChips(scoped);
 
-            let filtered = transactions.filter(t => {
-                // Month filter
-                if (tableFilterMode === 'month_only' && currentMonth) {
-                    if (!t.date || !t.date.startsWith(currentMonth)) return false;
-                }
-
+            let filtered = scoped.filter(t => {
                 // Category filter
                 if (tableSelectedCat !== 'all' && t.category !== tableSelectedCat) {
                     return false;
@@ -974,7 +1197,7 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
 
             const badge = document.getElementById('txCountBadge');
             if (badge) {
-                badge.innerText = \`\${filtered.length} / \${transactions.length} Kayıt\`;
+                badge.innerText = \`\${filtered.length} / \${scoped.length} Kayıt\`;
             }
 
             if (filtered.length === 0) {
@@ -1034,10 +1257,12 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                 btn.className = 'text-[10px] uppercase font-bold px-2.5 py-1 bg-blue-600 text-white rounded-lg border border-blue-500 shadow transition';
                 input.disabled = true;
                 input.classList.add('opacity-40');
+                setTableFilterMode('all_time');
             } else {
                 btn.className = 'text-[10px] uppercase font-bold px-2.5 py-1 bg-zinc-900 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition';
                 input.disabled = false;
                 input.classList.remove('opacity-40');
+                setTableFilterMode('month_only');
             }
             updateAnalysis();
         }
@@ -1047,7 +1272,7 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             let income = 0, card = 0, transfer = 0, cash = 0, other = 0;
 
             transactions.forEach(t => {
-                if (isAllTimeMode || (t.date && t.date.substring(0, 7) === month)) {
+                if (isAllTimeMode || isSameMonth(t.date, month)) {
                     const amt = parseFloat(t.amount) || 0;
                     if (t.category === 'Sabit Gelir' || t.category === 'Ek Gelir') {
                         income += amt;

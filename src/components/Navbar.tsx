@@ -14,7 +14,8 @@ import {
   Smartphone,
   Lock
 } from 'lucide-react';
-import { GasConfig, ViewMode } from '../types';
+import { GasConfig, ViewMode, Transaction } from '../types';
+import { extractMonthKey } from '../services/gasService';
 
 interface NavbarProps {
   gasConfig: GasConfig;
@@ -22,6 +23,7 @@ interface NavbarProps {
   setActiveView: (view: ViewMode) => void;
   selectedMonth: string;
   setSelectedMonth: (month: string) => void;
+  transactions?: Transaction[];
   onSync: () => void;
   isSyncing: boolean;
   onOpenGasModal: () => void;
@@ -38,6 +40,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveView,
   selectedMonth,
   setSelectedMonth,
+  transactions = [],
   onSync,
   isSyncing,
   onOpenGasModal,
@@ -51,35 +54,94 @@ export const Navbar: React.FC<NavbarProps> = ({
   const now = new Date();
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  // Navigation helpers for month
-  const handlePrevMonth = () => {
-    let base = selectedMonth;
-    if (base === 'all') {
-      base = currentMonthStr;
+  // Extract available months from transactions
+  const availableMonthsWithCount = React.useMemo(() => {
+    const monthCounts = new Map<string, number>();
+    transactions.forEach((t) => {
+      const m = extractMonthKey(t.date);
+      if (m && m !== 'all') {
+        monthCounts.set(m, (monthCounts.get(m) || 0) + 1);
+      }
+    });
+
+    const monthSet = new Set<string>(monthCounts.keys());
+
+    // If currently selected month is a valid specific month, include it
+    if (selectedMonth && selectedMonth !== 'all') {
+      monthSet.add(selectedMonth);
     }
-    const [y, m] = base.split('-').map(Number);
-    const prevDate = new Date(y, m - 2, 1);
+
+    // If no transactions exist at all, at least provide current month
+    if (monthSet.size === 0) {
+      monthSet.add(currentMonthStr);
+    }
+
+    const sortedMonths = Array.from(monthSet).sort().reverse();
+    return sortedMonths.map((m) => ({
+      key: m,
+      count: monthCounts.get(m) || 0,
+    }));
+  }, [transactions, selectedMonth, currentMonthStr]);
+
+  // Navigation helpers for month (cycles through available data or steps chronologically)
+  const handlePrevMonth = () => {
+    if (selectedMonth === 'all') {
+      const latest = availableMonthsWithCount[0]?.key || currentMonthStr;
+      setSelectedMonth(latest);
+      return;
+    }
+
+    const keys = availableMonthsWithCount.map((item) => item.key);
+    const currentIndex = keys.indexOf(selectedMonth);
+    if (currentIndex !== -1 && currentIndex + 1 < keys.length) {
+      setSelectedMonth(keys[currentIndex + 1]);
+      return;
+    }
+
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const prevDate = new Date(y, (m || 1) - 2, 1);
     const prevMonthStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
     setSelectedMonth(prevMonthStr);
   };
 
   const handleNextMonth = () => {
-    let base = selectedMonth;
-    if (base === 'all') {
-      base = currentMonthStr;
+    if (selectedMonth === 'all') {
+      const latest = availableMonthsWithCount[0]?.key || currentMonthStr;
+      setSelectedMonth(latest);
+      return;
     }
-    const [y, m] = base.split('-').map(Number);
-    const nextDate = new Date(y, m, 1);
+
+    const keys = availableMonthsWithCount.map((item) => item.key);
+    const currentIndex = keys.indexOf(selectedMonth);
+    if (currentIndex > 0) {
+      setSelectedMonth(keys[currentIndex - 1]);
+      return;
+    }
+
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const nextDate = new Date(y, m || 1, 1);
     const nextMonthStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
     setSelectedMonth(nextMonthStr);
   };
 
   const handleCurrentMonth = () => {
-    setSelectedMonth(currentMonthStr);
+    // If currentMonthStr has records, pick it. Otherwise pick the latest month with records.
+    const hasCurrentRecords = transactions.some((t) => extractMonthKey(t.date) === currentMonthStr);
+    if (hasCurrentRecords || transactions.length === 0) {
+      setSelectedMonth(currentMonthStr);
+      return;
+    }
+    const latestWithData = availableMonthsWithCount.find((item) => item.count > 0)?.key;
+    setSelectedMonth(latestWithData || currentMonthStr);
   };
 
-  const handleAllTime = () => {
-    setSelectedMonth('all');
+  const handleToggleAllTime = () => {
+    if (selectedMonth === 'all') {
+      const latestWithData = availableMonthsWithCount.find((item) => item.count > 0)?.key || currentMonthStr;
+      setSelectedMonth(latestWithData);
+    } else {
+      setSelectedMonth('all');
+    }
   };
 
   // Format month name in Turkish
@@ -151,19 +213,34 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             ‹
           </button>
-          <div className="flex items-center gap-2 px-2 text-xs font-mono font-bold text-zinc-200 uppercase tracking-tight min-w-[140px] justify-center">
-            {isAllTime ? (
-              <>
-                <Globe className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-                <span className="text-blue-400">TÜM ZAMANLAR</span>
-              </>
-            ) : (
-              <>
-                <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                <span>{formattedMonth}</span>
-              </>
-            )}
-          </div>
+          
+            {/* Direct Month Dropdown Selector */}
+            <div className="relative flex items-center">
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="appearance-none bg-zinc-950/80 hover:bg-zinc-800/80 text-zinc-200 border border-zinc-700/80 rounded-lg px-2.5 py-1 text-xs font-mono font-bold uppercase tracking-tight outline-none focus:border-blue-500 transition cursor-pointer pr-7 text-center min-w-[170px]"
+                title="Dönem / Ay Seçin"
+              >
+                <option value="all" className="bg-zinc-900 text-blue-400 font-bold">
+                  🌐 TÜM ZAMANLAR ({transactions.length})
+                </option>
+                {availableMonthsWithCount.map(({ key: m, count }) => {
+                  const [y, mn] = m.split('-').map(Number);
+                  const mDate = new Date(y, (mn || 1) - 1, 1);
+                  const name = mDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+                  return (
+                    <option key={m} value={m} className="bg-zinc-900 text-zinc-100">
+                      📅 {name.toUpperCase()} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+              <div className="pointer-events-none absolute right-2 text-[10px] text-zinc-400">
+                ▼
+              </div>
+            </div>
+
           <button
             onClick={handleNextMonth}
             className="w-7 h-7 flex items-center justify-center text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition"
@@ -189,7 +266,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Tümü (All Time) Button */}
           <button
-            onClick={handleAllTime}
+            onClick={handleToggleAllTime}
             className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg transition border flex items-center gap-1 ${
               isAllTime
                 ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-900/30'
