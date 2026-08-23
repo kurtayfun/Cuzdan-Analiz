@@ -322,29 +322,70 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             </section>
         </div>
 
-        <!-- İşlem Listesi Tablosu -->
-        <section class="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden">
-            <div class="p-4 sm:p-5 border-b border-zinc-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div class="flex items-center gap-2">
-                    <h2 class="font-bold text-sm text-zinc-100 uppercase tracking-tight">İşlem Geçmişi</h2>
-                    <span id="txCountBadge" class="text-[11px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-mono">0 Kayıt</span>
+        <!-- İşlem Listesi Tablosu & Gelişmiş Filtreleme -->
+        <section class="bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <!-- Header bar -->
+            <div class="p-4 sm:p-5 border-b border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-zinc-900/50">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+                        <h2 class="text-sm font-bold text-zinc-300 uppercase tracking-widest">SON İŞLEMLER</h2>
+                        <span id="txCountBadge" class="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-mono">0 Kayıt</span>
+                    </div>
+                    <p id="tablePeriodSubtitle" class="text-[10px] text-zinc-500 uppercase font-mono mt-0.5">
+                        DÖNEM İŞLEM HAREKETLERİ
+                    </p>
                 </div>
-                <input type="text" id="searchInput" oninput="filterTable()" placeholder="Kayıtlarda ara..." 
-                    class="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs text-zinc-100 outline-none focus:border-blue-500 w-full sm:w-64">
+
+                <!-- Filter Controls -->
+                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                    <!-- Mode Switcher (Bu Ay / Tümü) -->
+                    <div class="flex items-center bg-zinc-950 border border-zinc-800 p-0.5 rounded-lg text-xs">
+                        <button type="button" id="tableFilterBtnMonth" onclick="setTableFilterMode('month_only')"
+                            class="px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition bg-zinc-800 text-blue-400">
+                            Bu Ay
+                        </button>
+                        <button type="button" id="tableFilterBtnAll" onclick="setTableFilterMode('all_time')"
+                            class="px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition text-zinc-500 hover:text-zinc-300">
+                            Tümü
+                        </button>
+                    </div>
+
+                    <!-- Search Box -->
+                    <div class="relative flex-1 sm:w-48">
+                        <span class="absolute left-2.5 top-2 text-zinc-500 text-xs">🔍</span>
+                        <input type="text" id="searchInput" oninput="handleSearchInput(this.value)" placeholder="Filtrele veya ara..." 
+                            class="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-7 pr-3 py-1.5 text-xs text-zinc-200 outline-none focus:border-blue-500 font-mono transition-colors">
+                    </div>
+
+                    <!-- Sort Selector -->
+                    <select id="sortOrderSelect" onchange="handleSortChange(this.value)"
+                        class="bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-blue-500 font-sans">
+                        <option value="date_desc">Tarih (Yeni → Eski)</option>
+                        <option value="date_asc">Tarih (Eski → Yeni)</option>
+                        <option value="amount_desc">Tutar (Yüksek → Düşük)</option>
+                    </select>
+                </div>
             </div>
 
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs">
-                    <thead class="bg-zinc-950/60 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
+            <!-- Category Chips Bar -->
+            <div id="categoryChipsBar" class="px-4 sm:px-5 py-2.5 bg-zinc-950/40 border-b border-zinc-800/80 flex items-center gap-1.5 overflow-x-auto text-[11px]">
+                <!-- Rendered dynamically by JS -->
+            </div>
+
+            <!-- Table Body -->
+            <div class="flex-1 overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-zinc-950/50 text-zinc-500 text-[10px] uppercase font-bold sticky top-0 tracking-wider">
                         <tr>
-                            <th class="p-3.5">Tarih</th>
-                            <th class="p-3.5">Kategori</th>
-                            <th class="p-3.5">Açıklama</th>
-                            <th class="p-3.5 text-right">Tutar</th>
-                            <th class="p-3.5 text-center">İşlem</th>
+                            <th class="p-3.5 sm:p-4 border-b border-zinc-800">Tarih</th>
+                            <th class="p-3.5 sm:p-4 border-b border-zinc-800">Kategori</th>
+                            <th class="p-3.5 sm:p-4 border-b border-zinc-800">Açıklama</th>
+                            <th class="p-3.5 sm:p-4 border-b border-zinc-800 text-right">Tutar</th>
+                            <th class="p-3.5 sm:p-4 border-b border-zinc-800 text-center w-28">Eylem</th>
                         </tr>
                     </thead>
-                    <tbody id="tableBody" class="divide-y divide-zinc-800/60 font-medium"></tbody>
+                    <tbody id="tableBody" class="text-xs divide-y divide-zinc-800/50"></tbody>
                 </table>
             </div>
         </section>
@@ -502,15 +543,32 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
         }
 
         // ==========================================
-        // UYGULAMA BAŞLANGIÇ
+        // UYGULAMA BAŞLANGIÇ & FİLTRE DURUMU
         // ==========================================
+        let tableFilterMode = 'month_only'; // 'month_only' | 'all_time'
+        let tableSelectedCat = 'all';
+        let tableSearchQuery = '';
+        let tableSortOrder = 'date_desc';
+
+        const CATEGORIES = [
+            'Sabit Gelir',
+            'Kart Ekstresi',
+            'Transfer Gideri',
+            'Nakit Çekim',
+            'Ek Gelir',
+            'Diğer Gider'
+        ];
+
         function initApp() {
             const now = new Date();
             const monthStr = \`\${now.getFullYear()}-\${String(now.getMonth() + 1).padStart(2, '0')}\`;
             document.getElementById('selectedMonth').value = monthStr;
             document.getElementById('txDate').value = getLocalDateStr();
 
-            document.getElementById('selectedMonth').addEventListener('change', updateAnalysis);
+            document.getElementById('selectedMonth').addEventListener('change', () => {
+                updateAnalysis();
+                renderTable();
+            });
 
             renderQuickTemplates();
             renderTable();
@@ -541,6 +599,71 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                 document.getElementById('txAmount').value = tpl.defaultAmount;
             }
             document.getElementById('txAmount').focus();
+        }
+
+        function openTemplateManager() {
+            renderTemplateList();
+            document.getElementById('tplModal').classList.remove('hidden');
+        }
+
+        function closeTemplateManager() {
+            document.getElementById('tplModal').classList.add('hidden');
+        }
+
+        function renderTemplateList() {
+            const list = document.getElementById('tplList');
+            if (!list) return;
+            list.innerHTML = quickTemplates.map(tpl => \`
+                <div class="flex items-center justify-between p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl">
+                    <div class="truncate pr-2">
+                        <span class="font-bold text-xs text-zinc-200 block truncate">\${tpl.title}</span>
+                        <span class="text-[10px] text-zinc-400 block">\${tpl.category} \${tpl.defaultAmount ? '• ' + formatTRY(tpl.defaultAmount) : ''}</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button type="button" onclick="editTemplate('\${tpl.id}')" class="p-1 text-zinc-400 hover:text-blue-400 text-xs">✏️</button>
+                        <button type="button" onclick="deleteTemplate('\${tpl.id}')" class="p-1 text-zinc-400 hover:text-rose-400 text-xs">🗑️</button>
+                    </div>
+                </div>
+            \`).join('');
+        }
+
+        function editTemplate(id) {
+            const tpl = quickTemplates.find(t => t.id === id);
+            if (!tpl) return;
+            document.getElementById('tplId').value = tpl.id;
+            document.getElementById('tplTitle').value = tpl.title;
+            document.getElementById('tplCategory').value = tpl.category;
+            document.getElementById('tplNote').value = tpl.defaultNote || '';
+            document.getElementById('tplAmount').value = tpl.defaultAmount || '';
+            document.getElementById('tplFormHeading').innerText = 'Şablonu Düzenle';
+        }
+
+        function deleteTemplate(id) {
+            quickTemplates = quickTemplates.filter(t => t.id !== id);
+            localStorage.setItem('local_tpls_v2', JSON.stringify(quickTemplates));
+            renderQuickTemplates();
+            renderTemplateList();
+        }
+
+        function saveCustomTemplate(e) {
+            e.preventDefault();
+            const id = document.getElementById('tplId').value;
+            const title = document.getElementById('tplTitle').value.trim();
+            const category = document.getElementById('tplCategory').value;
+            const defaultNote = document.getElementById('tplNote').value.trim();
+            const defaultAmount = parseFloat(document.getElementById('tplAmount').value) || undefined;
+
+            if (id) {
+                quickTemplates = quickTemplates.map(t => t.id === id ? { id, title, category, defaultNote, defaultAmount } : t);
+            } else {
+                quickTemplates.push({ id: 'tpl_' + Date.now(), title, category, defaultNote, defaultAmount });
+            }
+            localStorage.setItem('local_tpls_v2', JSON.stringify(quickTemplates));
+            renderQuickTemplates();
+            renderTemplateList();
+            document.getElementById('tplForm').reset();
+            document.getElementById('tplId').value = '';
+            document.getElementById('tplFormHeading').innerText = 'Yeni Şablon Ekle';
         }
 
         function formatTRY(num) {
@@ -712,47 +835,195 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             }
         }
 
+        async function duplicateTx(id) {
+            const item = transactions.find(t => t.id === id);
+            if (!item) return;
+            const duplicated = {
+                id: 'ID_' + Date.now(),
+                date: item.date,
+                category: item.category,
+                amount: item.amount,
+                note: item.note ? item.note + ' (Kopya)' : 'Kopya'
+            };
+            transactions.unshift(duplicated);
+            localStorage.setItem('local_tx_v2', JSON.stringify(transactions));
+            renderTable();
+            updateAnalysis();
+
+            if (GAS_URL) {
+                try {
+                    await fetch(GAS_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'insert',
+                            ...duplicated,
+                            pin: STORED_PIN || undefined
+                        })
+                    });
+                } catch(err) {
+                    console.error('GAS Duplicate Error:', err);
+                }
+            }
+        }
+
+        // ==========================================
+        // GELİŞMİŞ FİLTRELEME & TABLO GÖRÜNÜMÜ
+        // ==========================================
+        function setTableFilterMode(mode) {
+            tableFilterMode = mode;
+            const btnMonth = document.getElementById('tableFilterBtnMonth');
+            const btnAll = document.getElementById('tableFilterBtnAll');
+            if (mode === 'month_only') {
+                btnMonth.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition bg-zinc-800 text-blue-400';
+                btnAll.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition text-zinc-500 hover:text-zinc-300';
+            } else {
+                btnMonth.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition text-zinc-500 hover:text-zinc-300';
+                btnAll.className = 'px-2.5 py-1 rounded-md font-bold uppercase text-[10px] tracking-wider transition bg-zinc-800 text-blue-400';
+            }
+            renderTable();
+        }
+
+        function setTableCategory(cat) {
+            tableSelectedCat = cat;
+            renderCategoryChips();
+            renderTable();
+        }
+
+        function handleSearchInput(val) {
+            tableSearchQuery = val || '';
+            renderTable();
+        }
+
+        function handleSortChange(val) {
+            tableSortOrder = val || 'date_desc';
+            renderTable();
+        }
+
+        function renderCategoryChips() {
+            const bar = document.getElementById('categoryChipsBar');
+            if (!bar) return;
+
+            let html = \`
+                <button type="button" onclick="setTableCategory('all')"
+                    class="px-2.5 py-1 rounded-md font-bold uppercase tracking-wider transition whitespace-nowrap \${tableSelectedCat === 'all' ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'}">
+                    Hepsi (\${transactions.length})
+                </button>
+            \`;
+
+            CATEGORIES.forEach(cat => {
+                const count = transactions.filter(t => t.category === cat).length;
+                const isSelected = tableSelectedCat === cat;
+                html += \`
+                    <button type="button" onclick="setTableCategory('\${cat}')"
+                        class="px-2.5 py-1 rounded-md font-bold uppercase tracking-wider transition whitespace-nowrap \${isSelected ? 'bg-zinc-800 text-blue-400 border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300'}">
+                        \${cat} (\${count})
+                    </button>
+                \`;
+            });
+
+            bar.innerHTML = html;
+        }
+
         function renderTable() {
             const tbody = document.getElementById('tableBody');
-            document.getElementById('txCountBadge').innerText = \`\${transactions.length} Kayıt\`;
-            if (transactions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-zinc-500">Henüz kayıt eklenmemiş.</td></tr>';
+            const currentMonth = document.getElementById('selectedMonth').value;
+            const subtitleEl = document.getElementById('tablePeriodSubtitle');
+
+            if (subtitleEl) {
+                if (tableFilterMode === 'month_only' && currentMonth) {
+                    subtitleEl.innerText = \`\${currentMonth} DÖNEMİ İŞLEM HAREKETLERİ\`;
+                } else {
+                    subtitleEl.innerText = 'TÜM KAYIT GEÇMİŞİ';
+                }
+            }
+
+            renderCategoryChips();
+
+            let filtered = transactions.filter(t => {
+                // Month filter
+                if (tableFilterMode === 'month_only' && currentMonth) {
+                    if (!t.date || !t.date.startsWith(currentMonth)) return false;
+                }
+
+                // Category filter
+                if (tableSelectedCat !== 'all' && t.category !== tableSelectedCat) {
+                    return false;
+                }
+
+                // Search term
+                if (tableSearchQuery.trim()) {
+                    const q = tableSearchQuery.toLowerCase();
+                    const matchNote = (t.note || '').toLowerCase().includes(q);
+                    const matchCat = (t.category || '').toLowerCase().includes(q);
+                    const matchAmount = (t.amount || '').toString().includes(q);
+                    const matchDate = (t.date || '').includes(q);
+                    if (!matchNote && !matchCat && !matchAmount && !matchDate) return false;
+                }
+
+                return true;
+            });
+
+            filtered.sort((a, b) => {
+                if (tableSortOrder === 'date_desc') return new Date(b.date) - new Date(a.date);
+                if (tableSortOrder === 'date_asc') return new Date(a.date) - new Date(b.date);
+                if (tableSortOrder === 'amount_desc') return (Number(b.amount) || 0) - (Number(a.amount) || 0);
+                return 0;
+            });
+
+            const badge = document.getElementById('txCountBadge');
+            if (badge) {
+                badge.innerText = \`\${filtered.length} / \${transactions.length} Kayıt\`;
+            }
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = \`
+                    <tr>
+                        <td colspan="5" class="p-12 text-center text-zinc-500">
+                            <div class="flex flex-col items-center justify-center space-y-2">
+                                <div class="w-8 h-8 rounded-full bg-zinc-800/80 flex items-center justify-center text-zinc-400 text-sm mb-1">🔍</div>
+                                <p class="text-xs font-bold text-zinc-300 uppercase tracking-wider">Kayıt Bulunamadı</p>
+                                <p class="text-[11px] text-zinc-500 font-mono">
+                                    \${tableSearchQuery ? 'Arama kriterlerinize uygun hareket yok.' : 'Bu dönem veya kategori için henüz işlem girişi yapılmadı.'}
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                \`;
                 return;
             }
 
-            const sorted = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
-            
-            tbody.innerHTML = sorted.map(item => {
+            tbody.innerHTML = filtered.map(item => {
                 const isIncome = item.category === 'Sabit Gelir' || item.category === 'Ek Gelir';
-                let catBadge = 'bg-zinc-800 text-zinc-300';
-                if (item.category === 'Sabit Gelir' || item.category === 'Ek Gelir') catBadge = 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/80';
-                else if (item.category === 'Kart Ekstresi') catBadge = 'bg-rose-950/60 text-rose-400 border border-rose-800/80';
-                else if (item.category === 'Transfer Gideri') catBadge = 'bg-blue-950/60 text-blue-400 border border-blue-800/80';
-                else if (item.category === 'Nakit Çekim') catBadge = 'bg-amber-950/60 text-amber-400 border border-amber-800/80';
+                let catBadge = 'bg-zinc-800 text-zinc-300 border border-zinc-700';
+                if (item.category === 'Sabit Gelir') catBadge = 'bg-emerald-900/20 text-emerald-400 border border-emerald-900/30 text-[10px] font-bold uppercase';
+                else if (item.category === 'Ek Gelir') catBadge = 'bg-teal-900/20 text-teal-400 border border-teal-900/30 text-[10px] font-bold uppercase';
+                else if (item.category === 'Kart Ekstresi') catBadge = 'bg-rose-900/20 text-rose-400 border border-rose-900/30 text-[10px] font-bold uppercase';
+                else if (item.category === 'Transfer Gideri') catBadge = 'bg-amber-900/20 text-amber-400 border border-amber-900/30 text-[10px] font-bold uppercase';
+                else if (item.category === 'Nakit Çekim') catBadge = 'bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px] font-bold uppercase';
+                else catBadge = 'bg-purple-900/20 text-purple-400 border border-purple-900/30 text-[10px] font-bold uppercase';
+
+                const safeItem = JSON.stringify(item).replace(/"/g, '&quot;');
 
                 return \`
-                    <tr class="hover:bg-zinc-900/60 transition">
-                        <td class="p-3.5 font-mono text-zinc-400">\${item.date}</td>
-                        <td class="p-3.5"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-md \${catBadge}">\${item.category}</span></td>
-                        <td class="p-3.5 text-zinc-300 font-medium">\${item.note || '-'}</td>
-                        <td class="p-3.5 text-right font-mono font-bold \${isIncome ? 'text-emerald-400' : 'text-zinc-200'}">
+                    <tr class="hover:bg-zinc-800/30 transition-colors group">
+                        <td class="p-3.5 sm:p-4 font-mono text-zinc-400 text-xs">\${item.date}</td>
+                        <td class="p-3.5 sm:p-4"><span class="px-2 py-0.5 rounded-md \${catBadge}">\${item.category}</span></td>
+                        <td class="p-3.5 sm:p-4 text-zinc-300 font-medium text-xs">\${item.note || '-'}</td>
+                        <td class="p-3.5 sm:p-4 text-right font-mono font-bold text-xs \${isIncome ? 'text-emerald-400' : 'text-zinc-200'}">
                             \${isIncome ? '+' : '-'}\${formatTRY(item.amount)}
                         </td>
-                        <td class="p-3.5 text-center space-x-2">
-                            <button onclick='editTx(\${JSON.stringify(item)})' class="text-zinc-400 hover:text-white p-1" title="Düzenle">✏️</button>
-                            <button onclick='deleteTx("\${item.id}")' class="text-zinc-400 hover:text-rose-400 p-1" title="Sil">🗑️</button>
+                        <td class="p-3.5 sm:p-4 text-center">
+                            <div class="flex items-center justify-center gap-1.5 opacity-80 group-hover:opacity-100 transition">
+                                <button onclick="editTx(\${safeItem})" class="text-zinc-400 hover:text-blue-400 p-1 rounded hover:bg-zinc-800 transition" title="Düzenle">✏️</button>
+                                <button onclick="duplicateTx('\${item.id}')" class="text-zinc-400 hover:text-emerald-400 p-1 rounded hover:bg-zinc-800 transition" title="Kopyala">📋</button>
+                                <button onclick="deleteTx('\${item.id}')" class="text-zinc-400 hover:text-rose-400 p-1 rounded hover:bg-zinc-800 transition" title="Sil">🗑️</button>
+                            </div>
                         </td>
                     </tr>
                 \`;
             }).join('');
-        }
-
-        function filterTable() {
-            const query = document.getElementById('searchInput').value.toLowerCase();
-            const rows = document.querySelectorAll('#tableBody tr');
-            rows.forEach(r => {
-                r.style.display = r.innerText.toLowerCase().includes(query) ? '' : 'none';
-            });
         }
 
         function toggleAllTime() {
