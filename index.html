@@ -314,29 +314,58 @@
     </div>
 
     <!-- Şablon Yöneticisi Modal -->
-    <div id="tplModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div id="tplModal" onclick="if(event.target === this) closeTemplateManager()" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
         <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl">
             <div class="flex justify-between items-center p-4 border-b border-zinc-800 bg-zinc-950">
-                <h3 class="font-bold text-sm text-zinc-100">Şablon Yöneticisi</h3>
-                <button onclick="closeTemplateManager()" class="text-zinc-400 hover:text-white">✕</button>
+                <div class="flex items-center gap-2">
+                    <span class="text-base">⚡</span>
+                    <h3 class="font-bold text-sm text-zinc-100">Hızlı İşlem Şablonları</h3>
+                </div>
+                <button type="button" onclick="closeTemplateManager()" class="text-zinc-400 hover:text-white px-2 py-1 text-sm font-bold">✕</button>
             </div>
             <div class="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
-                <div id="tplList" class="space-y-2"></div>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center text-[11px] text-zinc-400 font-bold uppercase tracking-wider">
+                        <span>Kayıtlı Şablonlar</span>
+                        <button type="button" onclick="resetTemplatesToDefault()" class="text-[10px] text-zinc-400 hover:text-zinc-200 underline font-normal">Varsayılanlara Dön</button>
+                    </div>
+                    <div id="tplList" class="space-y-1.5"></div>
+                </div>
+
                 <form id="tplForm" onsubmit="saveCustomTemplate(event)" class="bg-zinc-950 border border-zinc-800 p-4 rounded-xl space-y-3">
-                    <h4 class="font-bold text-xs text-blue-400" id="tplFormHeading">Yeni Şablon Ekle</h4>
+                    <div class="flex justify-between items-center">
+                        <h4 class="font-bold text-xs text-blue-400" id="tplFormHeading">Yeni Şablon Ekle</h4>
+                        <button type="button" id="cancelTplEditBtn" onclick="resetTemplateForm()" class="hidden text-[10px] text-zinc-400 hover:text-zinc-200">İptal</button>
+                    </div>
                     <input type="hidden" id="tplId">
-                    <input type="text" id="tplTitle" placeholder="Şablon Başlığı (Örn: Kira, Fatura)" required class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
-                    <select id="tplCategory" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
-                        <option value="Transfer Gideri">Transfer Gideri</option>
-                        <option value="Kart Ekstresi">Kart Ekstresi</option>
-                        <option value="Nakit Çekim">Nakit Çekim</option>
-                        <option value="Sabit Gelir">Sabit Gelir</option>
-                        <option value="Ek Gelir">Ek Gelir</option>
-                        <option value="Diğer Gider">Diğer Gider</option>
-                    </select>
-                    <input type="text" id="tplNote" placeholder="Varsayılan Açıklama" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
-                    <input type="number" step="0.01" id="tplAmount" placeholder="Varsayılan Tutar (Opsiyonel)" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded-lg text-xs font-bold text-white">Kaydet</button>
+                    <div>
+                        <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Şablon Buton Adı</label>
+                        <input type="text" id="tplTitle" placeholder="Örn: Kira, Fatura, Market" required class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 outline-none focus:border-blue-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Kategori</label>
+                            <select id="tplCategory" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 outline-none focus:border-blue-500">
+                                <option value="Transfer Gideri">Transfer Gideri (-)</option>
+                                <option value="Kart Ekstresi">Kart Ekstresi (-)</option>
+                                <option value="Nakit Çekim">Nakit Çekim (-)</option>
+                                <option value="Sabit Gelir">Sabit Gelir (+)</option>
+                                <option value="Ek Gelir">Ek Gelir (+)</option>
+                                <option value="Diğer Gider">Diğer Gider (-)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Varsayılan Tutar (₺)</label>
+                            <input type="number" step="0.01" id="tplAmount" placeholder="Opsiyonel" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 outline-none focus:border-blue-500 font-mono">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-zinc-400 uppercase mb-1">Varsayılan Açıklama / Not</label>
+                        <input type="text" id="tplNote" placeholder="Örn: Aylık kira bedeli" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-100 outline-none focus:border-blue-500">
+                    </div>
+                    <button type="submit" id="saveTplBtn" class="w-full bg-blue-600 hover:bg-blue-500 py-2.5 rounded-lg text-xs font-bold text-white transition shadow-md shadow-blue-950">
+                        Şablonu Kaydet
+                    </button>
                 </form>
             </div>
         </div>
@@ -486,24 +515,177 @@
             }
         }
 
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         function renderQuickTemplates() {
             const grid = document.getElementById('quickTemplatesGrid');
+            if (!quickTemplates || quickTemplates.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-[10px] text-zinc-500 py-1 italic">Tanımlı şablon yok. "⚙️ Şablonlar" ile ekleyebilirsiniz.</div>';
+                return;
+            }
             grid.innerHTML = quickTemplates.map(tpl => `
-                <button type="button" onclick='applyTemplate(${JSON.stringify(tpl)})'
-                    class="bg-zinc-800/80 hover:bg-zinc-700 active:bg-blue-600 p-2 rounded-xl border border-zinc-700/80 text-left transition flex flex-col justify-between truncate">
-                    <span class="font-bold text-zinc-200 truncate block">${tpl.title}</span>
-                    <span class="text-[9px] text-zinc-400 truncate block">${tpl.category}</span>
+                <button type="button" onclick="applyTemplateById('${tpl.id}')"
+                    class="bg-zinc-800/80 hover:bg-zinc-700 active:bg-blue-600 p-2 rounded-xl border border-zinc-700/80 text-left transition flex flex-col justify-between truncate group">
+                    <span class="font-bold text-zinc-200 group-hover:text-white truncate block">${escapeHtml(tpl.title)}</span>
+                    <span class="text-[9px] text-zinc-400 truncate block">${escapeHtml(tpl.category)}</span>
                 </button>
             `).join('');
+        }
+
+        function applyTemplateById(id) {
+            const tpl = quickTemplates.find(t => t.id === id);
+            if (!tpl) return;
+            applyTemplate(tpl);
         }
 
         function applyTemplate(tpl) {
             document.getElementById('txCategory').value = tpl.category;
             document.getElementById('txNote').value = tpl.defaultNote || tpl.title;
-            if (tpl.defaultAmount) {
+            if (tpl.defaultAmount !== undefined && tpl.defaultAmount !== null && tpl.defaultAmount !== '') {
                 document.getElementById('txAmount').value = tpl.defaultAmount;
+            } else {
+                document.getElementById('txAmount').value = '';
             }
             document.getElementById('txAmount').focus();
+        }
+
+        // ==========================================
+        // ŞABLON YÖNETİCİSİ MODAL MANTIĞI
+        // ==========================================
+        function openTemplateManager() {
+            const modal = document.getElementById('tplModal');
+            modal.classList.remove('hidden');
+            renderTemplateList();
+            resetTemplateForm();
+        }
+
+        function closeTemplateManager() {
+            const modal = document.getElementById('tplModal');
+            modal.classList.add('hidden');
+            resetTemplateForm();
+        }
+
+        function renderTemplateList() {
+            const list = document.getElementById('tplList');
+            if (!quickTemplates || quickTemplates.length === 0) {
+                list.innerHTML = '<div class="text-xs text-zinc-500 text-center py-4 bg-zinc-950/60 rounded-xl border border-zinc-800/80">Kayıtlı şablon bulunmuyor. Aşağıdan yeni bir tane ekleyebilirsiniz.</div>';
+                return;
+            }
+
+            list.innerHTML = quickTemplates.map(tpl => {
+                const isIncome = tpl.category === 'Sabit Gelir' || tpl.category === 'Ek Gelir';
+                const catColor = isIncome ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60' : 'bg-zinc-800 text-zinc-300 border-zinc-700';
+                return `
+                    <div class="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs">
+                        <div class="truncate mr-2">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-zinc-100">${escapeHtml(tpl.title)}</span>
+                                <span class="text-[9px] px-1.5 py-0.5 rounded border ${catColor}">${escapeHtml(tpl.category)}</span>
+                            </div>
+                            <div class="text-[11px] text-zinc-400 truncate mt-0.5">
+                                ${tpl.defaultNote ? escapeHtml(tpl.defaultNote) : '<span class="text-zinc-600">Açıklama yok</span>'}
+                                ${tpl.defaultAmount ? `<span class="font-mono text-zinc-300 ml-1.5 font-semibold">• ₺${tpl.defaultAmount}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <button type="button" onclick="editTemplate('${tpl.id}')" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition" title="Düzenle">
+                                ✏️
+                            </button>
+                            <button type="button" onclick="deleteTemplate('${tpl.id}')" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950 text-rose-400 transition" title="Sil">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function editTemplate(id) {
+            const tpl = quickTemplates.find(t => t.id === id);
+            if (!tpl) return;
+            document.getElementById('tplId').value = tpl.id;
+            document.getElementById('tplTitle').value = tpl.title;
+            document.getElementById('tplCategory').value = tpl.category;
+            document.getElementById('tplNote').value = tpl.defaultNote || '';
+            document.getElementById('tplAmount').value = tpl.defaultAmount !== undefined ? tpl.defaultAmount : '';
+            document.getElementById('tplFormHeading').innerText = 'Şablonu Düzenle';
+            document.getElementById('cancelTplEditBtn').classList.remove('hidden');
+            document.getElementById('tplTitle').focus();
+        }
+
+        function resetTemplateForm() {
+            document.getElementById('tplForm').reset();
+            document.getElementById('tplId').value = '';
+            document.getElementById('tplFormHeading').innerText = 'Yeni Şablon Ekle';
+            document.getElementById('cancelTplEditBtn').classList.add('hidden');
+        }
+
+        function saveCustomTemplate(e) {
+            e.preventDefault();
+            const id = document.getElementById('tplId').value;
+            const title = document.getElementById('tplTitle').value.trim();
+            const category = document.getElementById('tplCategory').value;
+            const note = document.getElementById('tplNote').value.trim();
+            const amtStr = document.getElementById('tplAmount').value;
+            const amount = amtStr !== '' ? parseFloat(amtStr) : undefined;
+
+            if (!title) {
+                alert('Lütfen şablon başlığı girin.');
+                return;
+            }
+
+            if (id) {
+                quickTemplates = quickTemplates.map(t => t.id === id ? {
+                    id: t.id,
+                    title,
+                    category,
+                    defaultNote: note,
+                    defaultAmount: amount
+                } : t);
+            } else {
+                const newTpl = {
+                    id: 'tpl_' + Date.now(),
+                    title,
+                    category,
+                    defaultNote: note,
+                    defaultAmount: amount
+                };
+                quickTemplates.push(newTpl);
+            }
+
+            localStorage.setItem('local_tpls_v2', JSON.stringify(quickTemplates));
+            renderTemplateList();
+            renderQuickTemplates();
+            resetTemplateForm();
+        }
+
+        function deleteTemplate(id) {
+            const tpl = quickTemplates.find(t => t.id === id);
+            const promptName = tpl ? tpl.title : 'Bu şablonu';
+            if (!confirm(`"${promptName}" şablonunu silmek istediğinize emin misiniz?`)) return;
+
+            quickTemplates = quickTemplates.filter(t => t.id !== id);
+            localStorage.setItem('local_tpls_v2', JSON.stringify(quickTemplates));
+            renderTemplateList();
+            renderQuickTemplates();
+            resetTemplateForm();
+        }
+
+        function resetTemplatesToDefault() {
+            if (!confirm('Tüm şablonlar varsayılan listeye sıfırlansın mı?')) return;
+            quickTemplates = JSON.parse(JSON.stringify(DEFAULT_TEMPLATES));
+            localStorage.setItem('local_tpls_v2', JSON.stringify(quickTemplates));
+            renderTemplateList();
+            renderQuickTemplates();
+            resetTemplateForm();
         }
 
         function formatTRY(num) {
@@ -811,6 +993,13 @@
 
         // Run lock check on load
         window.addEventListener('DOMContentLoaded', checkInitialLock);
+
+        // Escape key to close modals
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeTemplateManager();
+            }
+        });
     </script>
 </body>
 </html>
