@@ -44,31 +44,35 @@ function doGet(e) {
     headers.forEach((header, i) => {
       if (header === "Tarih") {
         let dateVal = "";
+        const rawCell = row[i];
         const displayVal = (displayRows[index] && displayRows[index][i]) ? String(displayRows[index][i]).trim() : "";
-        if (displayVal && displayVal.match(/\\d/)) {
+
+        if (rawCell instanceof Date && !isNaN(rawCell.getTime())) {
+          dateVal = Utilities.formatDate(rawCell, "GMT+3", "yyyy-MM-dd");
+        } else if (displayVal && displayVal.match(/\\d/)) {
           dateVal = displayVal;
-        } else if (row[i] instanceof Date) {
-          dateVal = Utilities.formatDate(row[i], ssTz, "yyyy-MM-dd");
         } else {
-          dateVal = String(row[i] || "").trim();
+          dateVal = String(rawCell || "").trim();
         }
         
-        // 2001 veya 2024 öncesi gelen yılları otomatik 2026'ya eşitle
+        // Standart YYYY-MM-DD formatına temizle ve 2024 öncesi yılları 2026 yap
         if (dateVal) {
-          if (dateVal.match(/^(\\d{4})[-/.]/)) {
-            let y = parseInt(dateVal.substring(0, 4), 10);
-            if (y < 2024) {
-              dateVal = "2026" + dateVal.substring(4);
-            }
-          } else if (dateVal.match(/[-/.](\\d{4})$/)) {
-            let parts = dateVal.split(/[-/.]/);
-            let y = parseInt(parts[2], 10);
-            if (y < 2024) {
-              dateVal = parts[0] + "." + parts[1] + ".2026";
-            }
-          } else if (dateVal.match(/^(\\d{1,2})[-/.](\\d{1,2})[-/.](\\d{2})$/)) {
-            let m = dateVal.match(/^(\\d{1,2})[-/.](\\d{1,2})[-/.](\\d{2})$/);
-            dateVal = m[1] + "." + m[2] + ".2026";
+          const dmyMatch = dateVal.match(/^(\\d{1,2})[-/.](\\d{1,2})[-/.](\\d{2,4})/);
+          if (dmyMatch) {
+            let d = parseInt(dmyMatch[1], 10);
+            let m = parseInt(dmyMatch[2], 10);
+            let y = parseInt(dmyMatch[3], 10);
+            if (y < 100) y = (y < 50 ? 2000 + y : 1900 + y);
+            if (y < 2024) y = 2026;
+            if (m > 12 && d <= 12) { let t = m; m = d; d = t; }
+            dateVal = y + "-" + (m < 10 ? "0" + m : m) + "-" + (d < 10 ? "0" + d : d);
+          } else if (dateVal.match(/^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})/)) {
+            let parts = dateVal.substring(0, 10).split(/[-/.]/);
+            let y = parseInt(parts[0], 10);
+            if (y < 2024) y = 2026;
+            let m = parseInt(parts[1], 10);
+            let d = parseInt(parts[2], 10);
+            dateVal = y + "-" + (m < 10 ? "0" + m : m) + "-" + (d < 10 ? "0" + d : d);
           }
         }
         
@@ -451,18 +455,45 @@ export function normalizeDateToYMD(rawDate: any): string {
     }
   }
 
-  const str = String(rawDate).trim();
+  let str = String(rawDate).trim();
   if (!str) return getLocalDateString();
 
-  // 3. Standalone Month Name (e.g. "Mart", "mart", "Ağustos", "Nisan", "Ocak")
-  const singleWord = str.toLowerCase().trim();
-  const cleanSingleWord = singleWord.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (TURKISH_MONTHS_MAP[singleWord] || TURKISH_MONTHS_MAP[cleanSingleWord]) {
-    const monthNum = TURKISH_MONTHS_MAP[singleWord] || TURKISH_MONTHS_MAP[cleanSingleWord];
-    return `${currentYear}-${monthNum}-01`;
+  // 3. Apps Script / standard format with day of week: "Sat Mar 14 2026 00:00:00 GMT+0300 (Türkiye Standard Time)"
+  const dowMonDayYr = str.match(/^[a-zA-Z]{3,}\s+([a-zA-Z]{3,})\s+(\d{1,2})\s+(\d{4})/);
+  if (dowMonDayYr) {
+    const monWord = dowMonDayYr[1].toLowerCase();
+    const cleanWord = monWord.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const mo = TURKISH_MONTHS_MAP[monWord] || TURKISH_MONTHS_MAP[cleanWord];
+    if (mo) {
+      return sanitizeYearMonthDay(parseInt(dowMonDayYr[3], 10), parseInt(mo, 10), parseInt(dowMonDayYr[2], 10));
+    }
   }
 
-  // 4. ISO format "YYYY-MM-DD..." (e.g. "2026-08-15" or "2001-08-23" or "2026-08-15T12:00:00.000Z")
+  // 4. Matches "14 Mar 2026" or "14 Mart 2026" or "14-Ağu-2026" or "14.Mart.2026"
+  const dayMonYr = str.match(/^(\d{1,2})[\s./-]+([a-zA-ZçğıöşüÇĞİÖŞÜ]{3,})[\s./-]+(\d{2,4})/);
+  if (dayMonYr) {
+    const cleanWord = dayMonYr[2].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const mo = TURKISH_MONTHS_MAP[dayMonYr[2].toLowerCase()] || TURKISH_MONTHS_MAP[cleanWord];
+    if (mo) {
+      let yr = dayMonYr[3];
+      if (yr.length === 2) yr = '20' + yr;
+      return sanitizeYearMonthDay(parseInt(yr, 10), parseInt(mo, 10), parseInt(dayMonYr[1], 10));
+    }
+  }
+
+  // 5. Matches "Mar 14 2026" or "Mart 14 2026"
+  const monDayYr = str.match(/^([a-zA-ZçğıöşüÇĞİÖŞÜ]{3,})[\s./-]+(\d{1,2})[\s./,-]+(\d{2,4})/);
+  if (monDayYr) {
+    const cleanWord = monDayYr[1].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const mo = TURKISH_MONTHS_MAP[monDayYr[1].toLowerCase()] || TURKISH_MONTHS_MAP[cleanWord];
+    if (mo) {
+      let yr = monDayYr[3];
+      if (yr.length === 2) yr = '20' + yr;
+      return sanitizeYearMonthDay(parseInt(yr, 10), parseInt(mo, 10), parseInt(monDayYr[2], 10));
+    }
+  }
+
+  // 6. ISO format "YYYY-MM-DD..." (e.g. "2026-08-15" or "2026-08-15T12:00:00.000Z")
   const isoMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (isoMatch) {
     const y = parseInt(isoMatch[1], 10);
@@ -471,30 +502,20 @@ export function normalizeDateToYMD(rawDate: any): string {
     return sanitizeYearMonthDay(y, m, d);
   }
 
-  // 5. Turkish / English text date format with year e.g. "23 Ağustos 2026", "23 Ağustos 2001", "15-Ağu-2026", "23.Ağustos.26", "Mart 2026"
-  const textDateMatch = str.match(/^(\d{1,2})?[\s./-]+([a-zA-ZçğıöşüÇĞİÖŞÜ]+)[\s./-]+(\d{2,4})/i);
-  if (textDateMatch) {
-    const day = parseInt(textDateMatch[1] || '1', 10);
-    const monthWord = textDateMatch[2].toLowerCase().trim();
-    let yearStr = textDateMatch[3];
-    if (yearStr.length === 2) yearStr = '20' + yearStr;
-    const year = parseInt(yearStr, 10);
-    const cleanWord = monthWord.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const monthNum = parseInt(TURKISH_MONTHS_MAP[monthWord] || TURKISH_MONTHS_MAP[cleanWord] || '1', 10);
-    return sanitizeYearMonthDay(year, monthNum, day);
+  // 7. 3-part numeric date: "DD.MM.YYYY", "DD/MM/YYYY", "DD-MM-YYYY", "DD.MM.YY"
+  const num3Match = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);
+  if (num3Match) {
+    let d = parseInt(num3Match[1], 10);
+    let m = parseInt(num3Match[2], 10);
+    let y = parseInt(num3Match[3], 10);
+    if (y < 100) y = (y < 50 ? 2000 + y : 1900 + y);
+    if (m > 12 && d <= 12) {
+      const temp = m; m = d; d = temp;
+    }
+    return sanitizeYearMonthDay(y, m, d);
   }
 
-  // 6. Text date WITHOUT year e.g. "23 Ağustos", "15-Ağu", "15 Ağu"
-  const textDateNoYearMatch = str.match(/^(\d{1,2})[\s./-]+([a-zA-ZçğıöşüÇĞİÖŞÜ]+)$/i);
-  if (textDateNoYearMatch) {
-    const day = parseInt(textDateNoYearMatch[1], 10);
-    const monthWord = textDateNoYearMatch[2].toLowerCase().trim();
-    const cleanWord = monthWord.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const monthNum = parseInt(TURKISH_MONTHS_MAP[monthWord] || TURKISH_MONTHS_MAP[cleanWord] || '1', 10);
-    return sanitizeYearMonthDay(currentYear, monthNum, day);
-  }
-
-  // 7. Month name + year e.g. "Ağustos 2026", "Mart 2001", "Ağustos-2026", "Mart/26"
+  // 8. Month name + year e.g. "Ağustos 2026", "Mart 2001", "Ağustos-2026", "Mart/26"
   const monthTextYearMatch = str.match(/^([a-zA-ZçğıöşüÇĞİÖŞÜ]+)[\s./-]+(\d{2,4})$/i);
   if (monthTextYearMatch) {
     const monthWord = monthTextYearMatch[1].toLowerCase().trim();
@@ -506,61 +527,15 @@ export function normalizeDateToYMD(rawDate: any): string {
     return sanitizeYearMonthDay(year, monthNum, 1);
   }
 
-  // 8. 3-part numeric date: "DD.MM.YYYY", "DD/MM/YYYY", "DD-MM-YYYY", "DD.MM.YY", "YYYY-MM-DD"
-  const num3Match = str.match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})/);
-  if (num3Match) {
-    const p1 = parseInt(num3Match[1], 10);
-    const p2 = parseInt(num3Match[2], 10);
-    const p3 = parseInt(num3Match[3], 10);
-
-    if (p1 >= 1000) {
-      // YYYY-MM-DD
-      return sanitizeYearMonthDay(p1, p2, p3);
-    } else if (p3 >= 1000) {
-      // DD-MM-YYYY or MM-DD-YYYY
-      if (p2 > 12 && p1 <= 12) {
-        return sanitizeYearMonthDay(p3, p1, p2);
-      } else {
-        return sanitizeYearMonthDay(p3, p2, p1);
-      }
-    } else {
-      // 2-digit years e.g. 23.08.26 or 01.08.26 or 26.08.01
-      if (p1 > 12) {
-        // p1 is definitely Day
-        const y2 = p3 < 100 ? (p3 < 50 ? 2000 + p3 : 1900 + p3) : p3;
-        return sanitizeYearMonthDay(y2, p2, p1);
-      } else if (p2 > 12) {
-        // US style MM.DD.YY
-        const y2 = p3 < 100 ? (p3 < 50 ? 2000 + p3 : 1900 + p3) : p3;
-        return sanitizeYearMonthDay(y2, p1, p2);
-      } else if (p3 === 26 || p3 === 2026) {
-        // Standard Turkish DD.MM.YY (e.g. 01.08.26 -> Day 1, Month 8, Year 2026)
-        return sanitizeYearMonthDay(2026, p2, p1);
-      } else if (p1 === 26 || p1 === 2026) {
-        // YY.MM.DD (e.g. 26.08.01 -> Year 2026, Month 8, Day 1)
-        return sanitizeYearMonthDay(2026, p2, p3);
-      } else {
-        const y2 = p3 < 100 ? (p3 < 50 ? 2000 + p3 : 1900 + p3) : p3;
-        return sanitizeYearMonthDay(y2, p2, p1);
-      }
-    }
+  // 9. Standalone Month Name (e.g. "Mart", "mart", "Ağustos", "Nisan", "Ocak")
+  const singleWord = str.toLowerCase().trim();
+  const cleanSingleWord = singleWord.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (TURKISH_MONTHS_MAP[singleWord] || TURKISH_MONTHS_MAP[cleanSingleWord]) {
+    const monthNum = TURKISH_MONTHS_MAP[singleWord] || TURKISH_MONTHS_MAP[cleanSingleWord];
+    return `${currentYear}-${monthNum}-01`;
   }
 
-  // 9. Numeric Day + Month WITHOUT year e.g. "15.08", "15/08", "15-08"
-  const dayMonthMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})$/);
-  if (dayMonthMatch) {
-    const part1 = parseInt(dayMonthMatch[1], 10);
-    const part2 = parseInt(dayMonthMatch[2], 10);
-    let day = part1;
-    let month = part2;
-    if (part1 <= 12 && part2 > 12) {
-      month = part1;
-      day = part2;
-    }
-    return sanitizeYearMonthDay(currentYear, month, day);
-  }
-
-  // 10. Year-Month only e.g. "2026-08", "08-2026", "2001-08"
+  // 10. Year-Month only e.g. "2026-08", "08-2026"
   const ymMatch1 = str.match(/^(\d{4})[-/.](\d{1,2})$/);
   if (ymMatch1) {
     const y = parseInt(ymMatch1[1], 10);
@@ -594,8 +569,39 @@ export function normalizeDateToYMD(rawDate: any): string {
 export function extractMonthKey(rawDate: any): string {
   if (!rawDate) return '';
   if (rawDate === 'all') return 'all';
+
+  if (typeof rawDate === 'object') {
+    if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+      let y = rawDate.getFullYear();
+      if (y < 2024) y = 2026;
+      return `${y}-${String(rawDate.getMonth() + 1).padStart(2, '0')}`;
+    }
+    const inner = rawDate.date || rawDate.Tarih || rawDate.tarih || rawDate.period || rawDate.value;
+    if (inner) return extractMonthKey(inner);
+  }
+
   const str = String(rawDate).trim();
   if (str === 'all') return 'all';
+
+  const direct = str.match(/^(\d{4})[-/.](\d{1,2})/);
+  if (direct) {
+    let y = parseInt(direct[1], 10);
+    let m = parseInt(direct[2], 10);
+    if (y < 2024) y = 2026;
+    if (m >= 1 && m <= 12) {
+      return `${y}-${String(m).padStart(2, '0')}`;
+    }
+  }
+
+  const myMatch = str.match(/^(\d{1,2})[-/.](\d{4})$/);
+  if (myMatch) {
+    let m = parseInt(myMatch[1], 10);
+    let y = parseInt(myMatch[2], 10);
+    if (y < 2024) y = 2026;
+    if (m >= 1 && m <= 12) {
+      return `${y}-${String(m).padStart(2, '0')}`;
+    }
+  }
 
   const ymd = normalizeDateToYMD(rawDate);
   if (ymd && ymd.length >= 7) {
@@ -608,27 +614,25 @@ export function extractMonthKey(rawDate: any): string {
 
 // Helper to check if a transaction belongs to a given month
 export function isSameMonth(txDate: any, targetMonth: string): boolean {
-  if (!targetMonth || targetMonth === 'all') return true;
+  if (!targetMonth || targetMonth === 'all' || targetMonth === 'ALL') return true;
   if (!txDate) return false;
 
   const txKey = extractMonthKey(txDate);
-  const targetKey = extractMonthKey(targetMonth) || targetMonth;
+  const targetKey = extractMonthKey(targetMonth) || String(targetMonth).trim().substring(0, 7);
 
   if (txKey && targetKey && txKey === targetKey) {
     return true;
   }
 
-  // Also check month portion matching (e.g. if target is "2026-08" and txKey is "2026-08")
-  if (txKey.includes('-') && targetKey.includes('-')) {
-    const [, txM] = txKey.split('-');
-    const [, targetM] = targetKey.split('-');
-    if (txM === targetM) {
-      return true;
-    }
+  const normalized = normalizeDateToYMD(txDate);
+  if (targetKey && normalized.startsWith(targetKey)) {
+    return true;
   }
 
-  const normalized = normalizeDateToYMD(txDate);
-  if (normalized.startsWith(targetKey)) {
+  // Year-tolerant matching for cross-year local PC selections (e.g. 2024 vs 2026 data)
+  const targetM = targetKey.includes('-') ? targetKey.split('-')[1] : targetKey;
+  const txM = txKey.includes('-') ? txKey.split('-')[1] : (normalized ? normalized.split('-')[1] : '');
+  if (targetM && txM && parseInt(targetM, 10) === parseInt(txM, 10)) {
     return true;
   }
 

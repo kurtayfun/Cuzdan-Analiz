@@ -374,14 +374,17 @@ export default function App() {
     let other = 0;
 
     for (const tx of filtered) {
-      const amt = Number(tx.amount) || 0;
-      if (tx.category === 'Sabit Gelir' || tx.category === 'Ek Gelir') {
+      const amt = Math.abs(Number(tx.amount) || 0);
+      const cat = String(tx.category || '').trim();
+      const catLower = cat.toLowerCase();
+
+      if (cat.includes('Gelir') || catLower.includes('gelir') || catLower.includes('maaş') || catLower.includes('maas') || catLower.includes('kazanç') || catLower.startsWith('+')) {
         income += amt;
-      } else if (tx.category === 'Kart Ekstresi') {
+      } else if (cat.includes('Kart') || catLower.includes('kart') || catLower.includes('ekstre')) {
         card += amt;
-      } else if (tx.category === 'Transfer Gideri') {
+      } else if (cat.includes('Transfer') || catLower.includes('transfer') || catLower.includes('kira') || catLower.includes('eft') || catLower.includes('havale') || catLower.includes('fatura') || catLower.includes('aidat')) {
         transfer += amt;
-      } else if (tx.category === 'Nakit Çekim') {
+      } else if (cat.includes('Nakit') || catLower.includes('nakit') || catLower.includes('atm') || catLower.includes('harçlık') || catLower.includes('harclik')) {
         cash += amt;
       } else {
         other += amt;

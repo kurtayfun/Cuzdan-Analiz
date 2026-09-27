@@ -15,7 +15,7 @@ import {
   Lock
 } from 'lucide-react';
 import { GasConfig, ViewMode, Transaction } from '../types';
-import { extractMonthKey } from '../services/gasService';
+import { extractMonthKey, isSameMonth } from '../services/gasService';
 
 interface NavbarProps {
   gasConfig: GasConfig;
@@ -125,9 +125,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const handleCurrentMonth = () => {
-    // If currentMonthStr has records, pick it. Otherwise pick the latest month with records.
-    const hasCurrentRecords = transactions.some((t) => extractMonthKey(t.date) === currentMonthStr);
-    if (hasCurrentRecords || transactions.length === 0) {
+    // If current calendar month has records, pick it. Otherwise pick the latest month with records.
+    const hasCurrentRecords = transactions.some((t) => isSameMonth(t.date, currentMonthStr));
+    if (hasCurrentRecords) {
       setSelectedMonth(currentMonthStr);
       return;
     }

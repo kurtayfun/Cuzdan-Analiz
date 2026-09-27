@@ -147,7 +147,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               onClick={() => {
                 if (onSelectMonth) {
                   const latestMonth = otherMonthsWithData.find((m) => m.count > 0)?.mKey;
-                  const currentMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+                  const currentMonthStr = `${Math.max(new Date().getFullYear(), 2026)}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
                   onSelectMonth(latestMonth || currentMonthStr);
                 }
               }}
@@ -157,7 +157,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              Dönem Bazlı
+              📅 Seçili Ay
             </button>
             <button
               onClick={() => {
@@ -171,7 +171,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              Tümü
+              🌐 Tümünü Seç
             </button>
           </div>
 
