@@ -280,19 +280,15 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                             <h2 class="font-bold text-sm text-zinc-200 uppercase">Konsolide Nakit Analizi</h2>
                             <p class="text-zinc-500 text-xs">Seçili dönemin toplam nakit akışı ve tasarruf dengesi</p>
                         </div>
-                        <div class="flex items-center gap-2 bg-zinc-800/80 p-1 rounded-xl border border-zinc-700">
-                            <input type="month" id="selectedMonth" class="bg-transparent text-xs font-semibold text-zinc-100 px-2 py-1 outline-none">
+                        <div class="flex items-center gap-1.5 bg-zinc-800/80 p-1 rounded-xl border border-zinc-700">
+                            <button type="button" onclick="stepMonth(-1)" class="w-6 h-6 flex items-center justify-center text-xs text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-lg transition" title="Önceki Ay">‹</button>
+                            <select id="selectedMonthSelect" onchange="selectMonthKey(this.value)" class="bg-zinc-950/80 hover:bg-zinc-800 text-zinc-100 text-xs font-mono font-bold uppercase px-2 py-1 rounded-lg border border-zinc-700 outline-none focus:border-blue-500 transition cursor-pointer text-center min-w-[150px]">
+                                <option value="all">🌐 TÜM ZAMANLAR</option>
+                            </select>
+                            <input type="hidden" id="selectedMonth" value="">
+                            <button type="button" onclick="stepMonth(1)" class="w-6 h-6 flex items-center justify-center text-xs text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-lg transition" title="Sonraki Ay">›</button>
                             <button type="button" id="allTimeBtn" onclick="toggleAllTime()" class="text-[10px] uppercase font-bold px-2.5 py-1 bg-zinc-900 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition">Tümü</button>
                         </div>
-                    </div>
-
-                    <!-- Dönem Filtre Butonları -->
-                    <div class="space-y-1.5">
-                        <div class="flex items-center justify-between text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                            <span>Dönem Seçimi</span>
-                            <span id="activePeriodLabel" class="text-blue-400 font-semibold lowercase">seçili ay</span>
-                        </div>
-                        <div id="monthPillsContainer" class="flex flex-wrap items-center gap-1.5"></div>
                     </div>
 
                     <!-- 3'lü Metrik Kartı -->
@@ -967,6 +963,49 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             return Object.keys(monthCounts).sort().reverse();
         }
 
+        function updateMonthSelect() {
+            const select = document.getElementById('selectedMonthSelect');
+            if (!select) return;
+
+            const available = getAvailableMonths();
+            const current = document.getElementById('selectedMonth').value;
+            const currentKey = extractMonthKey(current) || current;
+
+            let html = \`<option value="all" \${isAllTimeMode ? 'selected' : ''}>🌐 TÜM ZAMANLAR (\${transactions.length})</option>\`;
+            
+            available.forEach(m => {
+                const count = transactions.filter(t => isSameMonth(t.date, m)).length;
+                const isSel = !isAllTimeMode && (currentKey === m);
+                html += \`<option value="\${m}" \${isSel ? 'selected' : ''}>📅 \${getMonthNameTr(m).toUpperCase()} (\${count})</option>\`;
+            });
+
+            select.innerHTML = html;
+        }
+
+        function stepMonth(delta) {
+            const available = getAvailableMonths();
+            if (available.length === 0) return;
+
+            if (isAllTimeMode) {
+                selectMonthKey(delta > 0 ? available[available.length - 1] : available[0]);
+                return;
+            }
+
+            const current = document.getElementById('selectedMonth').value;
+            const currentKey = extractMonthKey(current) || current;
+            const idx = available.indexOf(currentKey);
+
+            if (idx === -1) {
+                selectMonthKey(available[0]);
+                return;
+            }
+
+            const targetIdx = idx - delta;
+            if (targetIdx >= 0 && targetIdx < available.length) {
+                selectMonthKey(available[targetIdx]);
+            }
+        }
+
         function selectCurrentMonth() {
             const available = getAvailableMonths();
             const now = new Date();
@@ -1049,6 +1088,7 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             const input = document.getElementById('selectedMonth');
             if (input) input.value = canonicalKey;
             updateAllTimeBtnState();
+            updateMonthSelect();
             renderMonthPills();
             updateAnalysis();
             renderTable();
@@ -1057,6 +1097,7 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
         function setAllTimeMode(val) {
             isAllTimeMode = Boolean(val);
             updateAllTimeBtnState();
+            updateMonthSelect();
             renderMonthPills();
             updateAnalysis();
             renderTable();
@@ -1139,6 +1180,7 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
             });
 
             updateAllTimeBtnState();
+            updateMonthSelect();
             renderQuickTemplates();
             renderMonthPills();
             renderTable();
@@ -1389,6 +1431,8 @@ export function generateSingleFileHtml(defaultGasUrl = '', initialTemplates?: Qu
                     });
                     localStorage.setItem('local_tx_v2', JSON.stringify(transactions));
                     autoAlignMonth();
+                    updateAllTimeBtnState();
+                    updateMonthSelect();
                     renderMonthPills();
                     renderTable();
                     updateAnalysis();
